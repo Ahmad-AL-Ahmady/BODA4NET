@@ -12,6 +12,11 @@ import InvoicePage from "./InvoicePage.jsx";
 import Swal from "sweetalert2";
 import "./App.css";
 
+// API Base URL - will work for both local and production
+const API_BASE_URL = import.meta.env.PROD
+  ? window.location.origin
+  : "http://localhost:3001";
+
 function App() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [amount, setAmount] = useState("");
@@ -126,7 +131,7 @@ function App() {
         return;
       }
 
-      const response = await fetch("http://localhost:3001/api/payment/create", {
+      const response = await fetch(`${API_BASE_URL}/api/payment/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -178,7 +183,7 @@ function App() {
     const checkInterval = setInterval(async () => {
       try {
         const response = await fetch(
-          "http://localhost:3001/api/payment/check-and-process",
+          `${API_BASE_URL}/api/payment/check-and-process`,
           {
             method: "POST",
             headers: {
