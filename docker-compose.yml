@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  app:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - UQ_PUBLIC_KEY=${UQ_PUBLIC_KEY}
+      - UQ_SECRET_KEY=${UQ_SECRET_KEY}
+      - SHA7NAWY_PUBLIC_KEY=${SHA7NAWY_PUBLIC_KEY}
+      - SHA7NAWY_SECRET_KEY=${SHA7NAWY_SECRET_KEY}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX_REQUESTS=100
+      - LOG_LEVEL=info
+    volumes:
+      - logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:3001/api/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  logs:
