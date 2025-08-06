@@ -14,19 +14,30 @@ BODA4NET is a full-stack web application for Vodafone Egypt mobile top-ups and h
 
 ## Project Structure
 
-### Frontend (`/src/`)
+This project is organized into separate frontend and backend directories:
+
+### Frontend (`/frontend/`)
 
 ```
-src/
-├── App.jsx                 # Main React component with balance & internet recharge UI
-├── InvoicePage.jsx         # Invoice/payment confirmation page
-├── main.jsx               # React application entry point
-├── index.css              # Global styles
-├── App.css               # Application-specific styles
-├── components/ui/         # 47 Shadcn/ui components (buttons, inputs, etc.)
-├── lib/utils.js          # Utility functions
-├── hooks/use-mobile.js   # Mobile device detection hook
-└── config/               # Configuration files
+frontend/
+├── src/
+│   ├── App.jsx                 # Main React component with balance & internet recharge UI
+│   ├── InvoicePage.jsx         # Invoice/payment confirmation page
+│   ├── main.jsx               # React application entry point
+│   ├── index.css              # Global styles
+│   ├── App.css               # Application-specific styles
+│   ├── components/ui/         # 47 Shadcn/ui components (buttons, inputs, etc.)
+│   ├── lib/utils.js          # Utility functions
+│   ├── hooks/use-mobile.js   # Mobile device detection hook
+│   └── config/               # Configuration files
+├── public/               # Static assets
+├── vite.config.js        # Vite build configuration
+├── components.json       # Shadcn/ui component configuration
+├── jsconfig.json         # JavaScript project configuration
+├── eslint.config.js      # ESLint configuration
+├── package.json          # Frontend dependencies
+├── pnpm-lock.yaml       # PNPM lock file
+└── index.html           # HTML entry point
 ```
 
 ### Backend (`/backend/`)
@@ -34,20 +45,22 @@ src/
 ```
 backend/
 ├── server.js             # Express server with all API endpoints
+├── middleware/           # Express middleware
+│   ├── logger.js         # Request logging middleware
+│   └── security.js       # Security middleware
 ├── package.json          # Backend dependencies
 └── package-lock.json    # Backend dependency lock file
 ```
 
-### Configuration Files
+### Root Configuration Files
 
 ```
-├── vite.config.js        # Vite build configuration
-├── components.json       # Shadcn/ui component configuration
-├── jsconfig.json         # JavaScript project configuration
-├── eslint.config.js      # ESLint configuration
-├── package.json          # Main project dependencies
-├── pnpm-lock.yaml       # PNPM lock file
-└── index.html           # HTML entry point
+├── package.json          # Root package.json with scripts for both frontend and backend
+├── docker-compose.yml    # Docker Compose configuration
+├── Dockerfile           # Docker build configuration
+├── ecosystem.config.js   # PM2 configuration for production
+├── render.yaml          # Render.com deployment configuration
+└── README.md           # This file
 ```
 
 ## Key Features
@@ -130,18 +143,30 @@ SHA7NAWY_SECRET_KEY=your_sha7nawy_secret_key
 
 ## Build & Development Scripts
 
-### Frontend Scripts
+### Root Scripts (run from project root)
 
-- `npm run dev` - Start Vite development server (port 5173)
+- `npm run dev` - Start both frontend and backend development servers concurrently
+- `npm run frontend:dev` - Start Vite development server (port 5173)
+- `npm run frontend:build` - Build frontend for production
+- `npm run frontend:preview` - Preview frontend production build
+- `npm run frontend:lint` - Run ESLint on frontend
+- `npm run backend:dev` - Start backend development server (port 3001)
+- `npm run backend:start` - Start backend in production mode
+- `npm run build` - Build frontend for production
+- `npm run start` - Build frontend & start backend in production
+- `npm run install:all` - Install dependencies for both frontend and backend
+
+### Frontend Scripts (run from `/frontend/` directory)
+
+- `npm run dev` - Start Vite development server
 - `npm run build` - Build for production
 - `npm run preview` - Preview production build
 - `npm run lint` - Run ESLint
 
-### Backend Scripts
+### Backend Scripts (run from `/backend/` directory)
 
-- `npm run backend` - Start backend development server
-- `npm run start` - Build frontend & start backend in production
-- `npm run dev:full` - Start both frontend and backend concurrently
+- `npm run dev` - Start development server
+- `npm start` - Start production server
 
 ## Deployment Instructions
 
@@ -157,13 +182,18 @@ SHA7NAWY_SECRET_KEY=your_sha7nawy_secret_key
 1. **Clone and Install Dependencies**
 
 ```bash
-# Install frontend dependencies
+# Install all dependencies (frontend and backend)
+npm run install:all
+
+# Or install manually:
+# Install root dependencies
 npm install
 
+# Install frontend dependencies
+cd frontend && npm install && cd ..
+
 # Install backend dependencies
-cd backend
-npm install
-cd ..
+cd backend && npm install && cd ..
 ```
 
 2. **Environment Configuration**
@@ -178,12 +208,16 @@ cp .env.example .env
 3. **Start Development Servers**
 
 ```bash
-# Option 1: Start both servers simultaneously
-npm run dev:full
+# Option 1: Start both servers simultaneously (recommended)
+npm run dev
 
 # Option 2: Start servers separately
-npm run dev          # Frontend on port 5173
-npm run backend      # Backend on port 3001
+npm run frontend:dev    # Frontend on port 5173
+npm run backend:dev     # Backend on port 3001
+
+# Option 3: Run from individual directories
+cd frontend && npm run dev    # Frontend
+cd backend && npm run dev     # Backend
 ```
 
 ### Production Deployment
@@ -193,9 +227,15 @@ npm run backend      # Backend on port 3001
 1. **Build the Application**
 
 ```bash
-npm install
+# Install dependencies and build
+npm run install:all
 npm run build
-cd backend && npm install --production
+
+# Or manually:
+npm install
+npm install --prefix frontend
+npm install --prefix backend --production
+npm run frontend:build
 ```
 
 2. **Set Environment Variables**

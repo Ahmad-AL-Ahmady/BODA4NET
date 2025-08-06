@@ -3,7 +3,7 @@ services:
     name: boda4net
     env: node
     plan: starter
-    buildCommand: npm install && npm run build && cd backend && npm install
+    buildCommand: npm install && npm run frontend:build && npm install --prefix backend
     startCommand: cd backend && npm start
     envVars:
       - key: NODE_ENV

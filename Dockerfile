@@ -6,17 +6,19 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
+COPY frontend/package*.json ./frontend/
 COPY backend/package*.json ./backend/
 
 # Install dependencies
 RUN npm ci --only=production --silent
+RUN cd frontend && npm ci --only=production --silent
 RUN cd backend && npm ci --only=production --silent
 
 # Copy source code
 COPY . .
 
 # Build frontend
-RUN npm run build
+RUN cd frontend && npm run build
 
 # Production stage
 FROM node:18-alpine AS production
@@ -33,7 +35,7 @@ WORKDIR /app
 
 # Copy backend files and built frontend
 COPY --from=builder --chown=backend:nodejs /app/backend ./backend
-COPY --from=builder --chown=backend:nodejs /app/dist ./dist
+COPY --from=builder --chown=backend:nodejs /app/frontend/dist ./dist
 COPY --from=builder --chown=backend:nodejs /app/backend/node_modules ./backend/node_modules
 
 # Create logs directory
