@@ -40,7 +40,7 @@ export const createRateLimit = (windowMs = 15 * 60 * 1000, max = 100) => {
 export const speedLimiter = slowDown({
   windowMs: 15 * 60 * 1000, // 15 minutes
   delayAfter: 5, // Allow 5 requests per windowMs at full speed
-  delayMs: 500, // Add 500ms delay after 5 requests
+  delayMs: () => 500, // Add 500ms delay after 5 requests (updated for v2)
   maxDelayMs: 20000, // Maximum delay of 20 seconds
 });
 
