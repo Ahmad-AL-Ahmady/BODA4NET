@@ -203,7 +203,28 @@ cd backend && npm install && cd ..
 cd backend
 cp .env.example .env
 # Edit .env with your API credentials
+
+# Create frontend environment file (optional)
+cd ../frontend
+cp .env.example .env.local
+# Edit .env.local if you need custom API URLs
 ```
+
+**Environment Variables:**
+
+**Frontend (`/frontend/.env.local`):**
+
+- `VITE_API_BASE_URL` - Backend API URL (default: auto-detected)
+
+**Backend (`/backend/.env`):**
+
+- `NODE_ENV` - Environment (development/production)
+- `PORT` - Server port (default: 3001)
+- `API_BASE_URL` - Internal API base URL
+- `CORS_ORIGIN` - Allowed frontend origins
+- `FRONTEND_URL` - Main frontend URL
+- `UQ_PUBLIC_KEY` & `UQ_SECRET_KEY` - Uquid API credentials
+- `SHA7NAWY_PUBLIC_KEY` & `SHA7NAWY_SECRET_KEY` - Sha7nawy API credentials
 
 3. **Start Development Servers**
 

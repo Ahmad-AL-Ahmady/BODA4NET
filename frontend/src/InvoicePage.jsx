@@ -91,7 +91,7 @@ const InvoicePage = ({
                 </div>
               )}
               <div className="flex justify-between">
-                <span>رسوم الخدمة (20%):</span>
+                <span>رسوم الخدمة (12%):</span>
                 <span className="font-semibold">
                   {invoiceData.serviceFee} جنيه
                 </span>

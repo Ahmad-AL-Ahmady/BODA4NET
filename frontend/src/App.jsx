@@ -12,10 +12,10 @@ import InvoicePage from "./InvoicePage.jsx";
 import Swal from "sweetalert2";
 import "./App.css";
 
-// API Base URL - will work for both local and production
-const API_BASE_URL = import.meta.env.PROD
-  ? window.location.origin
-  : "http://localhost:3001";
+// API Base URL - dynamic based on environment
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD ? window.location.origin : "http://localhost:3001");
 
 function App() {
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -44,7 +44,7 @@ function App() {
     }
 
     const parsedAmount = parseFloat(amount);
-    const serviceFee = parsedAmount * 0.2;
+    const serviceFee = parsedAmount * 0.12;
     const totalAmount = parsedAmount + serviceFee;
 
     setInvoiceData({
@@ -97,7 +97,7 @@ function App() {
         return;
     }
 
-    const serviceFee = packageAmount * 0.2;
+    const serviceFee = packageAmount * 0.12;
     const totalAmount = packageAmount + serviceFee;
 
     setInvoiceData({
