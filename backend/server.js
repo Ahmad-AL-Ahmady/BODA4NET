@@ -89,6 +89,21 @@ const SHA7NAWY_PUBLIC_KEY = process.env.SHA7NAWY_PUBLIC_KEY?.trim();
 const SHA7NAWY_SECRET_KEY = process.env.SHA7NAWY_SECRET_KEY?.trim();
 const SHA7NAWY_BASE_URL = "https://gate.sha7nawy.com/api";
 
+// Check for required environment variables
+if (!UQUID_API_KEY || !UQUID_API_SECRET) {
+  console.error(
+    "❌ Missing Uquid API credentials. Please set UQ_PUBLIC_KEY and UQ_SECRET_KEY in your .env file"
+  );
+  console.error("📝 Copy env.example to .env and fill in your API keys");
+}
+
+if (!SHA7NAWY_PUBLIC_KEY || !SHA7NAWY_SECRET_KEY) {
+  console.error(
+    "❌ Missing Sha7nawy API credentials. Please set SHA7NAWY_PUBLIC_KEY and SHA7NAWY_SECRET_KEY in your .env file"
+  );
+  console.error("📝 Copy env.example to .env and fill in your API keys");
+}
+
 // --- Helper Functions ---
 
 /**
@@ -116,6 +131,13 @@ function generateSignature(requestBody, secret) {
  */
 async function makeUquidRequest(requestBody) {
   try {
+    // Check if API keys are configured
+    if (!UQUID_API_KEY || !UQUID_API_SECRET) {
+      throw new Error(
+        "Uquid API credentials not configured. Please set UQ_PUBLIC_KEY and UQ_SECRET_KEY in your .env file"
+      );
+    }
+
     const signature = generateSignature(requestBody, UQUID_API_SECRET);
     const url = `${UQUID_BASE_URL}?api_key=${UQUID_API_KEY}&signature=${signature}`;
 
@@ -213,45 +235,116 @@ app.post(
         });
       }
 
-      // Calculate total amount with 20% service fee
+      // Calculate total amount with 12% service fee
       const topUpAmount = parseFloat(amount);
-      const serviceFee = topUpAmount * 0.2; // 20% fee
+      const serviceFee = topUpAmount * 0.12; // 12% fee
       const totalAmount = topUpAmount + serviceFee;
 
       console.log(
-        `[SHA7NAWY] Creating payment: ${phoneNumber} - ${totalAmount} EGP`
+        `[PAYMENT FLOW] Starting new payment flow: ${phoneNumber} - ${topUpAmount} EGP`
       );
+
+      // --- STEP 1: Check for item using the price (Uquid product validation) ---
+      console.log(
+        `[UQUID] Step 1: Checking for product with price ${topUpAmount} EGP`
+      );
+
+      const productsResponse = await makeUquidRequest({
+        action: "queryProductList",
+        nonce: Math.round(Date.now() / 1000),
+        params: { page: 1 },
+      });
+
+      if (!productsResponse.status || !productsResponse.data?.items) {
+        throw new Error("Could not fetch product list from Uquid.");
+      }
+
+      const vodafoneProducts = productsResponse.data.items.filter(
+        (p) =>
+          p.name?.toLowerCase().includes("vodafone") &&
+          p.name?.toLowerCase().includes("egypt")
+      );
+
+      if (vodafoneProducts.length === 0) {
+        throw new Error("No Vodafone Egypt products found on Uquid.");
+      }
+
+      // Find the product with the exact face value
+      const selectedProduct = vodafoneProducts.find(
+        (p) => p.extra?.range?.currentFace === topUpAmount
+      );
+
+      if (!selectedProduct) {
+        throw new Error(
+          `No suitable Uquid product found for amount ${topUpAmount} EGP.`
+        );
+      }
+      console.log(`[UQUID] Product found: ${selectedProduct.name}`);
+
+      // --- STEP 2: Check if the balance in Uquid can afford the transaction ---
+      console.log(`[UQUID] Step 2: Checking account balance`);
+
+      const balanceResponse = await makeUquidRequest({
+        action: "queryAccountBalance",
+        nonce: Math.round(Date.now() / 1000),
+      });
+
+      if (!balanceResponse.status || !balanceResponse.data) {
+        throw new Error("Could not fetch account balance from Uquid.");
+      }
+
+      // Extract USDT balance from the balance array
+      const usdtBalance = balanceResponse.data.find((b) => b.symbol === "usdt");
+      const availableBalance = usdtBalance
+        ? parseFloat(usdtBalance.available)
+        : 0;
+      const requiredAmount = selectedProduct.price; // The actual USD price of the product
+
+      if (availableBalance < requiredAmount) {
+        throw new Error(
+          `Insufficient balance. Available: ${availableBalance} USDT, Required: ${requiredAmount} USD for ${topUpAmount} EGP top-up`
+        );
+      }
+      console.log(
+        `[UQUID] Balance check passed. Available: ${availableBalance} USDT`
+      );
+
+      // --- STEP 3: Start the Sha7nawy process ---
+      console.log(`[SHA7NAWY] Step 3: Creating payment request`);
 
       const requestBody = {
         number: phoneNumber,
         amount: totalAmount,
         method: "vfcash",
         client: `User: ${phoneNumber}`,
-        details: `Vodafone Egypt Top-up ${topUpAmount} EGP (+ ${serviceFee} EGP fee)`,
+        details: `Vodafone Egypt Top-up ${topUpAmount} EGP (+ ${serviceFee} EGP 12% service fee)`,
       };
 
       const response = await makeSha7nawyRequest(
         "/payment/create",
         requestBody
       );
+
       if (response.status && response.data) {
         console.log(
           `[SHA7NAWY] Payment created. Ref: ${response.data.reference}`
         );
         res.json({
           success: true,
-          message: `${response.message} - You will pay ${totalAmount} EGP (${topUpAmount} EGP top-up + ${serviceFee} EGP service fee)`,
+          message: `${response.message} - You will pay ${totalAmount} EGP (${topUpAmount} EGP top-up + ${serviceFee} EGP 12% service fee)`,
           reference: response.data.reference,
           paymentId: response.data.id, // Payment ID for status checking
           topUpAmount: topUpAmount,
           serviceFee: serviceFee,
           totalAmount: totalAmount,
+          uquidProduct: selectedProduct, // Store product info for later use
+          uquidBalance: availableBalance, // Store balance info for later use
         });
       } else {
         throw new Error(response.message || "Failed to create payment");
       }
     } catch (error) {
-      console.error("[SHA7NAWY] Error creating payment:", error.message);
+      console.error("[PAYMENT FLOW] Error in payment creation:", error.message);
       res.status(500).json({ success: false, message: error.message });
     }
   }
@@ -349,16 +442,22 @@ app.post(
       const { amount: totalPaidAmount, number: phoneNumber } =
         sha7nawyResponse.data;
 
-      // Calculate the original top-up amount (excluding 20% service fee)
-      const topUpAmount = parseFloat(totalPaidAmount) / 1.2; // Remove 20% fee
+      // Calculate the original top-up amount (excluding 12% service fee)
+      const topUpAmount = parseFloat(totalPaidAmount) / 1.12; // Remove 12% fee
       const serviceFee = parseFloat(totalPaidAmount) - topUpAmount;
 
-      console.log(`[UQUID] Processing top-up: ${topUpAmount} EGP`);
+      console.log(
+        `[UQUID] Step 4: Processing top-up after Sha7nawy confirmation: ${topUpAmount} EGP`
+      );
+
+      // --- STEP 4: After confirmation from Sha7nawy, order from Uquid and finish the process ---
+      // Note: We need to get the product info again since we don't store it in the session
+      // In a production environment, you might want to store this in a database or cache
 
       const productsResponse = await makeUquidRequest({
         action: "queryProductList",
         nonce: Math.round(Date.now() / 1000),
-        params: { page: 1 }, // Fetching the first page is usually enough
+        params: { page: 1 },
       });
 
       if (!productsResponse.status || !productsResponse.data?.items) {
@@ -375,7 +474,7 @@ app.post(
         throw new Error("No Vodafone Egypt products found on Uquid.");
       }
 
-      // **CORRECTED LOGIC:** Find the product with the exact face value.
+      // Find the product with the exact face value
       const selectedProduct = vodafoneProducts.find(
         (p) => p.extra?.range?.currentFace === topUpAmount
       );
@@ -387,10 +486,7 @@ app.post(
       }
       console.log(`[UQUID] Selected product: ${selectedProduct.name}`);
 
-      // --- STEP 3: Submit the order to Uquid ---
-
       // Format phone number for Uquid (remove leading 0 and add Egypt country code)
-      // Clean the phone number first (remove any spaces, dashes, etc.)
       const cleanPhone = phoneNumber.replace(/\D/g, ""); // Remove all non-digit characters
 
       let formattedPhone;
@@ -432,7 +528,7 @@ app.post(
       const batchId = uquidSubmitResponse.data.batch_id;
       console.log(`[UQUID] Order submitted. Batch ID: ${batchId}`);
 
-      // --- STEP 4: Confirm the order with Uquid ---
+      // --- STEP 5: Confirm the order with Uquid ---
       const confirmOrderBody = {
         action: "confirmOrder",
         nonce: Math.round(Date.now() / 1000),
@@ -447,7 +543,7 @@ app.post(
         );
       }
 
-      console.log("[UQUID] Top-up successful");
+      console.log("[UQUID] Top-up successful - Process completed!");
       res.json({
         success: true,
         message: "Top-up successful!",
@@ -811,6 +907,55 @@ app.get("/api/account/balance", async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || "Failed to get account balance",
+    });
+  }
+});
+
+// Check Uquid product availability for a specific amount
+app.get("/api/uquid/products/check/:amount", async (req, res) => {
+  try {
+    const { amount } = req.params;
+    const topUpAmount = parseFloat(amount);
+
+    if (isNaN(topUpAmount) || topUpAmount < 5 || topUpAmount > 1000) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid amount. Must be between 5 and 1000 EGP",
+      });
+    }
+
+    const productsResponse = await makeUquidRequest({
+      action: "queryProductList",
+      nonce: Math.round(Date.now() / 1000),
+      params: { page: 1 },
+    });
+
+    if (!productsResponse.status || !productsResponse.data?.items) {
+      throw new Error("Could not fetch product list from Uquid.");
+    }
+
+    const vodafoneProducts = productsResponse.data.items.filter(
+      (p) =>
+        p.name?.toLowerCase().includes("vodafone") &&
+        p.name?.toLowerCase().includes("egypt")
+    );
+
+    const selectedProduct = vodafoneProducts.find(
+      (p) => p.extra?.range?.currentFace === topUpAmount
+    );
+
+    res.json({
+      success: true,
+      available: !!selectedProduct,
+      product: selectedProduct || null,
+      amount: topUpAmount,
+      totalProducts: vodafoneProducts.length,
+    });
+  } catch (error) {
+    console.error("[UQUID] Error checking product availability:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to check product availability",
     });
   }
 });

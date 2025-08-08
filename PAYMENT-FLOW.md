@@ -1,0 +1,182 @@
+# New Payment Flow Documentation
+
+## Overview
+
+The payment flow has been updated to follow a more robust sequence that ensures all prerequisites are met before processing payments.
+
+## New Payment Flow Sequence
+
+### 1. Check for Item Using Price (Uquid Product Validation)
+
+- **Endpoint**: `POST /api/payment/create`
+- **Action**: Queries Uquid API for Vodafone Egypt products
+- **Validation**: Ensures the requested amount has a corresponding product available
+- **Error Handling**: Returns error if no suitable product is found
+
+### 2. Check Uquid Balance
+
+- **Action**: Calls `queryAccountBalance` API
+- **Validation**: Ensures sufficient USDT balance for the transaction
+- **Error Handling**: Returns error if insufficient balance
+
+### 3. Start Sha7nawy Process
+
+- **Action**: Creates payment request with Sha7nawy
+- **Parameters**: Phone number, total amount (including 20% service fee)
+- **Response**: Returns payment reference and ID for tracking
+
+### 4. After Sha7nawy Confirmation, Order from Uquid
+
+- **Endpoint**: `POST /api/payment/check-and-process`
+- **Process**:
+  1. Confirm payment with Sha7nawy
+  2. Check payment status
+  3. If successful, submit order to Uquid
+  4. Confirm Uquid order
+  5. Complete transaction
+
+## API Endpoints
+
+### Payment Creation
+
+```http
+POST /api/payment/create
+Content-Type: application/json
+
+{
+  "phoneNumber": "01012345678",
+  "amount": 20
+}
+```
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "message": "Payment created successfully",
+  "reference": "REF123456",
+  "paymentId": "PAY123456",
+  "topUpAmount": 20,
+  "serviceFee": 4,
+  "totalAmount": 24,
+  "uquidProduct": {...},
+  "uquidBalance": 100
+}
+```
+
+### Payment Processing
+
+```http
+POST /api/payment/check-and-process
+Content-Type: application/json
+
+{
+  "paymentId": "PAY123456",
+  "reference": "REF123456"
+}
+```
+
+### Balance Check
+
+```http
+GET /api/account/balance
+```
+
+### Product Availability Check
+
+```http
+GET /api/uquid/products/check/{amount}
+```
+
+## Error Handling
+
+### Common Error Scenarios
+
+1. **Insufficient Balance**: Uquid account doesn't have enough USDT
+2. **Product Not Found**: No Vodafone Egypt product available for the requested amount
+3. **Payment Failed**: Sha7nawy payment was rejected or failed
+4. **Order Failed**: Uquid order submission or confirmation failed
+
+### Error Response Format
+
+```json
+{
+  "success": false,
+  "message": "Error description"
+}
+```
+
+## Frontend Integration
+
+### Enhanced User Experience
+
+- Shows loading states during each step
+- Displays progress indicators
+- Provides detailed success/error messages
+- Automatic retry mechanism for pending payments
+
+### User Flow
+
+1. User enters phone number and amount
+2. System shows "Checking product and balance" message
+3. If successful, shows payment instructions with reference code
+4. Automatically checks payment status every 10 seconds
+5. Shows detailed success message with transaction details
+
+## Testing
+
+### Test Script
+
+Run the test script to verify the new flow:
+
+```bash
+node backend/test-payment-flow.js
+```
+
+### Manual Testing
+
+1. Test with valid phone number and amount
+2. Test with insufficient balance
+3. Test with unavailable product amount
+4. Test payment confirmation flow
+
+## Security Considerations
+
+- All API calls are rate-limited
+- Input validation on all endpoints
+- Secure API key handling
+- Error messages don't expose sensitive information
+
+## Monitoring
+
+### Log Messages
+
+The system logs detailed information for each step:
+
+- `[PAYMENT FLOW] Starting new payment flow`
+- `[UQUID] Step 1: Checking for product`
+- `[UQUID] Step 2: Checking account balance`
+- `[SHA7NAWY] Step 3: Creating payment request`
+- `[UQUID] Step 4: Processing top-up after Sha7nawy confirmation`
+
+### Health Check
+
+The health check endpoint (`/api/health`) monitors both Uquid and Sha7nawy service availability.
+
+## Configuration
+
+### Environment Variables
+
+- `UQ_PUBLIC_KEY`: Uquid API public key
+- `UQ_SECRET_KEY`: Uquid API secret key
+- `SHA7NAWY_PUBLIC_KEY`: Sha7nawy API public key
+- `SHA7NAWY_SECRET_KEY`: Sha7nawy API secret key
+
+## Future Enhancements
+
+1. **Database Integration**: Store transaction details for better tracking
+2. **Caching**: Cache product information to reduce API calls
+3. **Webhooks**: Implement webhook support for real-time status updates
+4. **Retry Logic**: Implement exponential backoff for failed operations
+5. **Analytics**: Add transaction analytics and reporting

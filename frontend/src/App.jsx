@@ -131,6 +131,18 @@ function App() {
         return;
       }
 
+      // Show initial processing message
+      Swal.fire({
+        icon: "info",
+        title: "جاري التحقق من المنتج والرصيد...",
+        text: "يرجى الانتظار بينما نتحقق من توفر المنتج ورصيد الحساب",
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        didOpen: () => {
+          Swal.showLoading();
+        },
+      });
+
       const response = await fetch(`${API_BASE_URL}/api/payment/create`, {
         method: "POST",
         headers: {
@@ -145,18 +157,23 @@ function App() {
       const data = await response.json();
 
       if (!data.success) {
+        Swal.close();
         throw new Error(data.message || "فشل في إنشاء طلب الدفع");
       }
 
       setPaymentData(data);
       setPaymentId(data.paymentId);
 
-      // Show payment instructions and start checking status
+      // Show payment instructions with enhanced information
       Swal.fire({
         icon: "success",
-        title: "تم إنشاء طلب الدفع بنجاح!",
+        title: "تم التحقق بنجاح!",
         html: `
           <div style="text-align: center; line-height: 1.6;">
+            <p style="color: #28a745; font-weight: bold;">✓ تم التحقق من المنتج</p>
+            <p style="color: #28a745; font-weight: bold;">✓ تم التحقق من الرصيد</p>
+            <p style="color: #28a745; font-weight: bold;">✓ تم إنشاء طلب الدفع</p>
+            <hr style="margin: 15px 0;">
             <p><strong>اتصل بـ *9*1# واتبع التعليمات</strong></p>
             <p>رمز الدفع: <span style="font-size: 1.2em; color: #007bff; font-weight: bold;">${data.reference}</span></p>
             <p style="color: #6c757d;">سيتم التحقق من الدفع تلقائياً...</p>
@@ -171,6 +188,12 @@ function App() {
     } catch (err) {
       setError(err.message || "حدث خطأ في إنشاء طلب الدفع");
       setPaymentStep("invoice");
+      Swal.fire({
+        icon: "error",
+        title: "خطأ في العملية",
+        text: err.message || "حدث خطأ في إنشاء طلب الدفع",
+        confirmButtonText: "حسناً",
+      });
     } finally {
       setLoading(false);
     }
@@ -211,18 +234,31 @@ function App() {
             title: "🎉 تم شحن الرصيد بنجاح!",
             html: `
               <div style="text-align: center; line-height: 1.8;">
+                <p style="color: #28a745; font-weight: bold; margin: 10px 0;">✓ تم تأكيد الدفع من Sha7nawy</p>
+                <p style="color: #28a745; font-weight: bold; margin: 10px 0;">✓ تم طلب الشحن من Uquid</p>
+                <p style="color: #28a745; font-weight: bold; margin: 10px 0;">✓ تم تأكيد الطلب</p>
+                <hr style="margin: 15px 0;">
                 <p style="font-size: 1.1em; margin: 10px 0;">
                   <strong>المبلغ المشحون:</strong> 
-                  <span style="color: #28a745; font-weight: bold;">${data.transaction.topUpAmount} جنيه</span>
+                  <span style="color: #28a745; font-weight: bold;">${
+                    data.transaction.topUpAmount
+                  } جنيه</span>
                 </p>
                 <p style="font-size: 1.1em; margin: 10px 0;">
                   <strong>رقم الهاتف:</strong> 
-                  <span style="color: #007bff; font-weight: bold;">${data.transaction.phoneNumber}</span>
+                  <span style="color: #007bff; font-weight: bold;">${
+                    data.transaction.phoneNumber
+                  }</span>
+                </p>
+                <p style="font-size: 1em; margin: 10px 0; color: #6c757d;">
+                  <strong>رقم الطلب:</strong> ${
+                    data.uquidOrder?.batch_id || "غير متوفر"
+                  }
                 </p>
               </div>
             `,
             confirmButtonText: "ممتاز!",
-            timer: 5000,
+            timer: 8000,
             timerProgressBar: true,
           });
 
@@ -235,11 +271,25 @@ function App() {
           // Payment failed or rejected
           setError(`فشل في الدفع: ${data.message}`);
           setPaymentStep("invoice");
+          Swal.fire({
+            icon: "error",
+            title: "فشل في العملية",
+            text: data.message || "حدث خطأ في عملية الدفع",
+            confirmButtonText: "حسناً",
+          });
         }
-      } catch {
+      } catch (error) {
         clearInterval(checkInterval);
-        setError("حدث خطأ في التحقق من حالة الدفع");
+        setError(error.message || "حدث خطأ في التحقق من حالة الدفع");
         setPaymentStep("invoice");
+        Swal.fire({
+          icon: "error",
+          title: "خطأ في الاتصال",
+          text:
+            error.message ||
+            "حدث خطأ في التحقق من حالة الدفع. يرجى المحاولة مرة أخرى.",
+          confirmButtonText: "حسناً",
+        });
       }
     }, 10000); // Check every 10 seconds
 
@@ -249,6 +299,12 @@ function App() {
       if (paymentStep === "checking-status") {
         setError("انتهت مهلة التحقق من الدفع. يرجى المحاولة مرة أخرى.");
         setPaymentStep("invoice");
+        Swal.fire({
+          icon: "warning",
+          title: "انتهت المهلة",
+          text: "انتهت مهلة التحقق من الدفع. يرجى المحاولة مرة أخرى.",
+          confirmButtonText: "حسناً",
+        });
       }
     }, 600000); // 10 minutes
   };
@@ -366,6 +422,32 @@ function App() {
                   </div>
                   شحن الإنترنت المنزلي
                 </Button>
+              </div>
+            </div>
+          </section>
+
+          {/* رسالة التواصل في حالة الخطأ */}
+          <section className="py-8 bg-yellow-50 border-b border-yellow-200">
+            <div className="container mx-auto px-4">
+              <div className="text-center">
+                <p className="text-gray-700 text-lg">
+                  عند حدوث اي خطا برجاء التواصل عبر البريد الالكتروني
+                </p>
+                <a
+                  href="https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=mediaabuerr@gmail.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 mt-3 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.89 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
+                  </svg>
+                  mediaabuerr@gmail.com
+                </a>
               </div>
             </div>
           </section>
@@ -596,11 +678,11 @@ function App() {
             </div>
           </section>
 
-          {/* زر التواصل عبر جيميل */}
+          {/* زر التواصل عبر جيميل - مصغر */}
           <div className="fixed bottom-6 left-6">
             <Button
-              size="lg"
-              className="bg-red-500 hover:bg-red-600 rounded-full p-4 shadow-lg"
+              size="sm"
+              className="bg-red-500 hover:bg-red-600 rounded-full p-3 shadow-md opacity-80 hover:opacity-100 transition-opacity"
               onClick={() =>
                 window.open(
                   "https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=mediaabuerr@gmail.com",
@@ -608,7 +690,7 @@ function App() {
                 )
               }
             >
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.89 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
               </svg>
             </Button>
