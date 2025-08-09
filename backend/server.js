@@ -1,5 +1,4 @@
 import express from "express";
-import cors from "cors";
 import dotenv from "dotenv";
 import crypto from "crypto";
 import axios from "axios";
@@ -46,29 +45,6 @@ app.use(
 
 app.use(requestLogger); // Request logging
 
-// CORS Configuration
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
-
-    const allowedOrigins = [
-      "http://localhost:5173",
-      "http://localhost:3000",
-      process.env.CORS_ORIGIN,
-    ].filter(Boolean);
-
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  credentials: true,
-  optionsSuccessStatus: 200,
-};
-
-app.use(cors(corsOptions));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
@@ -117,6 +93,15 @@ if (!SHA7NAWY_PUBLIC_KEY || !SHA7NAWY_SECRET_KEY) {
 // --- Helper Functions ---
 
 /**
+ * Rounds a number to 2 decimal places to avoid floating-point precision issues
+ * @param {number} num - The number to round
+ * @returns {number} The rounded number
+ */
+function roundToTwo(num) {
+  return Math.round((num + Number.EPSILON) * 100) / 100;
+}
+
+/**
  * Calculate how to split a large payment amount into multiple API calls
  * Each API call is limited to 200 EGP maximum
  * @param {number} amount - The total amount to split
@@ -125,49 +110,38 @@ if (!SHA7NAWY_PUBLIC_KEY || !SHA7NAWY_SECRET_KEY) {
 function calculateApiCallSplit(amount) {
   const MAX_API_AMOUNT = 200;
 
-  if (amount <= MAX_API_AMOUNT) {
-    return [{ amount: amount, count: 1 }];
+  // Round the input amount to prevent precision issues
+  const roundedAmount = roundToTwo(amount);
+
+  if (roundedAmount <= MAX_API_AMOUNT) {
+    return [{ amount: roundedAmount, count: 1 }];
   }
 
   const splits = [];
-  let remainingAmount = amount;
+  let remainingAmount = roundedAmount;
 
   // Use as many 200 EGP calls as possible
   const count200 = Math.floor(remainingAmount / 200);
   if (count200 > 0) {
     splits.push({ amount: 200, count: count200 });
-    remainingAmount -= count200 * 200;
+    remainingAmount = roundToTwo(remainingAmount - count200 * 200);
   }
 
   // Split the remaining amount using available denominations
-  if (remainingAmount > 0) {
-    if (remainingAmount >= 100) {
-      splits.push({ amount: 100, count: Math.floor(remainingAmount / 100) });
-      remainingAmount %= 100;
+  const denominations = [100, 50, 25, 20, 15, 10];
+
+  for (const denom of denominations) {
+    if (remainingAmount >= denom) {
+      const count = Math.floor(remainingAmount / denom);
+      splits.push({ amount: denom, count });
+      remainingAmount = roundToTwo(remainingAmount - count * denom);
     }
-    if (remainingAmount >= 50) {
-      splits.push({ amount: 50, count: Math.floor(remainingAmount / 50) });
-      remainingAmount %= 50;
-    }
-    if (remainingAmount >= 25) {
-      splits.push({ amount: 25, count: Math.floor(remainingAmount / 25) });
-      remainingAmount %= 25;
-    }
-    if (remainingAmount >= 20) {
-      splits.push({ amount: 20, count: Math.floor(remainingAmount / 20) });
-      remainingAmount %= 20;
-    }
-    if (remainingAmount >= 15) {
-      splits.push({ amount: 15, count: Math.floor(remainingAmount / 15) });
-      remainingAmount %= 15;
-    }
-    if (remainingAmount >= 10) {
-      splits.push({ amount: 10, count: Math.floor(remainingAmount / 10) });
-      remainingAmount %= 10;
-    }
-    if (remainingAmount > 0) {
-      splits.push({ amount: remainingAmount, count: 1 });
-    }
+  }
+
+  // Handle any remaining fractional amount
+  if (remainingAmount > 0.01) {
+    // Use 0.01 to handle floating-point precision
+    splits.push({ amount: roundToTwo(remainingAmount), count: 1 });
   }
 
   return splits;
@@ -184,24 +158,37 @@ async function validateAndGetSplitProducts(apiCallSplits, vodafoneProducts) {
   let totalRequiredBalance = 0;
 
   for (const split of apiCallSplits) {
+    // Round both values for comparison to handle floating-point precision
+    const roundedSplitAmount = roundToTwo(split.amount);
+
     const product = vodafoneProducts.find(
-      (p) => p.extra?.range?.currentFace === split.amount
+      (p) => roundToTwo(p.extra?.range?.currentFace || 0) === roundedSplitAmount
     );
 
     if (!product) {
+      // More helpful error message with debugging info
+      const availableAmounts = vodafoneProducts
+        .map((p) => p.extra?.range?.currentFace)
+        .filter(Boolean)
+        .sort((a, b) => a - b);
+
       throw new Error(
-        `No suitable Uquid product found for amount ${split.amount} EGP`
+        `No suitable Uquid product found for amount ${roundedSplitAmount} EGP. Available amounts: ${availableAmounts.join(
+          ", "
+        )}`
       );
     }
 
     const productInfo = {
       ...product,
       requestedCount: split.count,
-      totalPrice: product.price * split.count,
+      totalPrice: roundToTwo(product.price * split.count),
     };
 
     selectedProducts.push(productInfo);
-    totalRequiredBalance += productInfo.totalPrice;
+    totalRequiredBalance = roundToTwo(
+      totalRequiredBalance + productInfo.totalPrice
+    );
   }
 
   return { selectedProducts, totalRequiredBalance };
@@ -381,9 +368,9 @@ app.post(
       }
 
       // Calculate total amount with 12% service fee
-      const topUpAmount = parseFloat(amount);
-      const serviceFee = topUpAmount * 0.12; // 12% fee
-      const totalAmount = topUpAmount + serviceFee;
+      const topUpAmount = roundToTwo(parseFloat(amount));
+      const serviceFee = roundToTwo(topUpAmount * 0.12); // 12% fee
+      const totalAmount = roundToTwo(topUpAmount + serviceFee);
 
       // Calculate API call splits for large amounts
       const apiCallSplits = calculateApiCallSplit(topUpAmount);
@@ -574,8 +561,8 @@ app.post(
         sha7nawyResponse.data;
 
       // Calculate the original top-up amount (excluding 12% service fee)
-      const topUpAmount = parseFloat(totalPaidAmount) / 1.12; // Remove 12% fee
-      const serviceFee = parseFloat(totalPaidAmount) - topUpAmount;
+      const topUpAmount = roundToTwo(parseFloat(totalPaidAmount) / 1.12); // Remove 12% fee
+      const serviceFee = roundToTwo(parseFloat(totalPaidAmount) - topUpAmount);
 
       // After confirmation from Sha7nawy, process multiple orders from Uquid
       // Recalculate splits and get products for confirmed payment
@@ -641,7 +628,7 @@ app.post(
               _order_coin: "usdt",
               _order_mode: "live",
               _order_quantity: "1",
-              _order_value: Math.round(split.amount).toString(),
+              _order_value: roundToTwo(split.amount).toString(),
               _order_force_mode: "live",
               mobile_number: formattedPhone,
             },
