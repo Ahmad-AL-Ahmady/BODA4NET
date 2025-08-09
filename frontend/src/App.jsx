@@ -535,6 +535,11 @@ function App() {
                           <SelectItem value="140">140 جنيه</SelectItem>
                           <SelectItem value="150">150 جنيه</SelectItem>
                           <SelectItem value="200">200 جنيه</SelectItem>
+                          <SelectItem value="500">500 جنيه</SelectItem>
+                          <SelectItem value="750">750 جنيه</SelectItem>
+                          <SelectItem value="1000">1000 جنيه</SelectItem>
+                          <SelectItem value="1500">1500 جنيه</SelectItem>
+                          <SelectItem value="2000">2000 جنيه</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

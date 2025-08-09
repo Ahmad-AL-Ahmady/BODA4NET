@@ -6,6 +6,7 @@ import axios from "axios";
 import path from "path";
 import { fileURLToPath } from "url";
 import compression from "compression";
+import morgan from "morgan";
 import {
   securityHeaders,
   createRateLimit,
@@ -34,6 +35,15 @@ app.set("trust proxy", 1);
 // Global Middleware
 app.use(compression()); // Gzip compression
 app.use(securityHeaders); // Security headers
+
+// Morgan HTTP request logging
+app.use(
+  morgan("🌐 :method :url :status :res[content-length] - :response-time ms", {
+    immediate: false,
+    stream: process.stdout,
+  })
+);
+
 app.use(requestLogger); // Request logging
 
 // CORS Configuration
@@ -107,6 +117,97 @@ if (!SHA7NAWY_PUBLIC_KEY || !SHA7NAWY_SECRET_KEY) {
 // --- Helper Functions ---
 
 /**
+ * Calculate how to split a large payment amount into multiple API calls
+ * Each API call is limited to 200 EGP maximum
+ * @param {number} amount - The total amount to split
+ * @returns {Array} Array of {amount, count} objects
+ */
+function calculateApiCallSplit(amount) {
+  const MAX_API_AMOUNT = 200;
+
+  if (amount <= MAX_API_AMOUNT) {
+    return [{ amount: amount, count: 1 }];
+  }
+
+  const splits = [];
+  let remainingAmount = amount;
+
+  // Use as many 200 EGP calls as possible
+  const count200 = Math.floor(remainingAmount / 200);
+  if (count200 > 0) {
+    splits.push({ amount: 200, count: count200 });
+    remainingAmount -= count200 * 200;
+  }
+
+  // Split the remaining amount using available denominations
+  if (remainingAmount > 0) {
+    if (remainingAmount >= 100) {
+      splits.push({ amount: 100, count: Math.floor(remainingAmount / 100) });
+      remainingAmount %= 100;
+    }
+    if (remainingAmount >= 50) {
+      splits.push({ amount: 50, count: Math.floor(remainingAmount / 50) });
+      remainingAmount %= 50;
+    }
+    if (remainingAmount >= 25) {
+      splits.push({ amount: 25, count: Math.floor(remainingAmount / 25) });
+      remainingAmount %= 25;
+    }
+    if (remainingAmount >= 20) {
+      splits.push({ amount: 20, count: Math.floor(remainingAmount / 20) });
+      remainingAmount %= 20;
+    }
+    if (remainingAmount >= 15) {
+      splits.push({ amount: 15, count: Math.floor(remainingAmount / 15) });
+      remainingAmount %= 15;
+    }
+    if (remainingAmount >= 10) {
+      splits.push({ amount: 10, count: Math.floor(remainingAmount / 10) });
+      remainingAmount %= 10;
+    }
+    if (remainingAmount > 0) {
+      splits.push({ amount: remainingAmount, count: 1 });
+    }
+  }
+
+  return splits;
+}
+
+/**
+ * Validate that products exist for all split amounts and calculate total cost
+ * @param {Array} apiCallSplits - Array of {amount, count} objects
+ * @param {Array} vodafoneProducts - Available Vodafone products
+ * @returns {Promise<object>} {selectedProducts, totalRequiredBalance}
+ */
+async function validateAndGetSplitProducts(apiCallSplits, vodafoneProducts) {
+  const selectedProducts = [];
+  let totalRequiredBalance = 0;
+
+  for (const split of apiCallSplits) {
+    const product = vodafoneProducts.find(
+      (p) => p.extra?.range?.currentFace === split.amount
+    );
+
+    if (!product) {
+      throw new Error(
+        `No suitable Uquid product found for amount ${split.amount} EGP`
+      );
+    }
+
+    const productInfo = {
+      ...product,
+      requestedCount: split.count,
+      totalPrice: product.price * split.count,
+    };
+
+    selectedProducts.push(productInfo);
+    totalRequiredBalance += productInfo.totalPrice;
+  }
+
+  return { selectedProducts, totalRequiredBalance };
+}
+
+/**
  * Generates an HMAC-SHA256 signature for Uquid API requests (like ping-uquid.js and test-uquid.js).
  * @param {object} requestBody - The request body object.
  * @param {string} secret - The Uquid API secret key.
@@ -130,6 +231,9 @@ function generateSignature(requestBody, secret) {
  * @returns {Promise<object>} The response data from the API.
  */
 async function makeUquidRequest(requestBody) {
+  const startTime = Date.now();
+  const requestId = Math.random().toString(36).substring(7);
+
   try {
     // Check if API keys are configured
     if (!UQUID_API_KEY || !UQUID_API_SECRET) {
@@ -148,9 +252,18 @@ async function makeUquidRequest(requestBody) {
       timeout: 45000,
     });
 
+    const duration = Date.now() - startTime;
+
     return response.data;
   } catch (error) {
-    console.error(`[UQUID] API Error:`, error.response?.data || error.message);
+    const duration = Date.now() - startTime;
+    logger.error(`[UQUID-${requestId}] API Error after ${duration}ms:`, {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      requestAction: requestBody.action,
+    });
+
     throw new Error(
       error.response?.data?.message || error.message || "API request failed"
     );
@@ -169,37 +282,66 @@ async function makeSha7nawyRequest(
   requestBody = null,
   useSecretKey = false
 ) {
-  const url = `${SHA7NAWY_BASE_URL}${endpoint}`;
-  const headers = {
-    Accept: "application/json",
-    Authorization: useSecretKey ? SHA7NAWY_SECRET_KEY : SHA7NAWY_PUBLIC_KEY,
-  };
-
-  const options = {
-    method: requestBody ? "POST" : "GET",
-    headers,
-    timeout: 30000,
-  };
-
-  if (requestBody) {
-    headers["Content-Type"] = "application/json";
-    options.body = JSON.stringify(requestBody);
-  }
+  const startTime = Date.now();
+  const requestId = Math.random().toString(36).substring(7);
 
   try {
+    // Check if API keys are configured
+    if (!SHA7NAWY_PUBLIC_KEY || !SHA7NAWY_SECRET_KEY) {
+      throw new Error(
+        "Sha7nawy API credentials not configured. Please set SHA7NAWY_PUBLIC_KEY and SHA7NAWY_SECRET_KEY in your .env file"
+      );
+    }
+
+    const url = `${SHA7NAWY_BASE_URL}${endpoint}`;
+    const authKey = useSecretKey ? SHA7NAWY_SECRET_KEY : SHA7NAWY_PUBLIC_KEY;
+    const headers = {
+      Accept: "application/json",
+      Authorization: authKey,
+    };
+
+    const options = {
+      method: requestBody ? "POST" : "GET",
+      headers,
+      timeout: 30000,
+    };
+
+    if (requestBody) {
+      headers["Content-Type"] = "application/json";
+      options.body = JSON.stringify(requestBody);
+    }
+
     const response = await fetch(url, options);
+    const duration = Date.now() - startTime;
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error("[SHA7NAWY] API Error:", errorData);
+      logger.error(`[SHA7NAWY-${requestId}] HTTP Error:`, {
+        status: response.status,
+        statusText: response.statusText,
+        endpoint,
+      });
       throw new Error(
         `HTTP error! status: ${response.status}, message: ${
           errorData.message || "Unknown error"
         }`
       );
     }
-    return await response.json();
+
+    const responseData = await response.json();
+
+    return responseData;
   } catch (error) {
-    console.error("[SHA7NAWY] API request failed:", error.message);
+    const duration = Date.now() - startTime;
+    logger.error(
+      `[SHA7NAWY-${requestId}] API request failed after ${duration}ms:`,
+      {
+        message: error.message,
+        name: error.name,
+        endpoint,
+      }
+    );
+
     throw new Error(error.message || "Sha7nawy API request failed");
   }
 }
@@ -213,6 +355,9 @@ app.post(
   validateAmount,
   handleValidationErrors,
   async (req, res) => {
+    const flowId = Math.random().toString(36).substring(7);
+    const flowStartTime = Date.now();
+
     try {
       const { phoneNumber, amount } = req.body;
 
@@ -228,10 +373,10 @@ app.post(
           message: "Invalid Vodafone Egypt number format",
         });
       }
-      if (amount < 5 || amount > 1000) {
+      if (amount < 5 || amount > 2000) {
         return res.status(400).json({
           success: false,
-          message: "Top-up amount must be between 5 and 1000 EGP",
+          message: "Top-up amount must be between 5 and 2000 EGP",
         });
       }
 
@@ -240,15 +385,12 @@ app.post(
       const serviceFee = topUpAmount * 0.12; // 12% fee
       const totalAmount = topUpAmount + serviceFee;
 
-      console.log(
-        `[PAYMENT FLOW] Starting new payment flow: ${phoneNumber} - ${topUpAmount} EGP`
-      );
+      // Calculate API call splits for large amounts
+      const apiCallSplits = calculateApiCallSplit(topUpAmount);
 
-      // --- STEP 1: Check for item using the price (Uquid product validation) ---
-      console.log(
-        `[UQUID] Step 1: Checking for product with price ${topUpAmount} EGP`
-      );
+      // Check for products using the split amounts (Uquid product validation)
 
+      const step1StartTime = Date.now();
       const productsResponse = await makeUquidRequest({
         action: "queryProductList",
         nonce: Math.round(Date.now() / 1000),
@@ -269,21 +411,11 @@ app.post(
         throw new Error("No Vodafone Egypt products found on Uquid.");
       }
 
-      // Find the product with the exact face value
-      const selectedProduct = vodafoneProducts.find(
-        (p) => p.extra?.range?.currentFace === topUpAmount
-      );
+      // Validate and get products for all splits
+      const { selectedProducts, totalRequiredBalance } =
+        await validateAndGetSplitProducts(apiCallSplits, vodafoneProducts);
 
-      if (!selectedProduct) {
-        throw new Error(
-          `No suitable Uquid product found for amount ${topUpAmount} EGP.`
-        );
-      }
-      console.log(`[UQUID] Product found: ${selectedProduct.name}`);
-
-      // --- STEP 2: Check if the balance in Uquid can afford the transaction ---
-      console.log(`[UQUID] Step 2: Checking account balance`);
-
+      // Check if the balance in Uquid can afford the transaction
       const balanceResponse = await makeUquidRequest({
         action: "queryAccountBalance",
         nonce: Math.round(Date.now() / 1000),
@@ -298,20 +430,14 @@ app.post(
       const availableBalance = usdtBalance
         ? parseFloat(usdtBalance.available)
         : 0;
-      const requiredAmount = selectedProduct.price; // The actual USD price of the product
 
-      if (availableBalance < requiredAmount) {
+      if (availableBalance < totalRequiredBalance) {
         throw new Error(
-          `Insufficient balance. Available: ${availableBalance} USDT, Required: ${requiredAmount} USD for ${topUpAmount} EGP top-up`
+          `Insufficient balance. Available: ${availableBalance} USDT, Required: ${totalRequiredBalance} USD for ${topUpAmount} EGP top-up (${apiCallSplits.length} API calls)`
         );
       }
-      console.log(
-        `[UQUID] Balance check passed. Available: ${availableBalance} USDT`
-      );
 
-      // --- STEP 3: Start the Sha7nawy process ---
-      console.log(`[SHA7NAWY] Step 3: Creating payment request`);
-
+      // Start the Sha7nawy process
       const requestBody = {
         number: phoneNumber,
         amount: totalAmount,
@@ -326,9 +452,6 @@ app.post(
       );
 
       if (response.status && response.data) {
-        console.log(
-          `[SHA7NAWY] Payment created. Ref: ${response.data.reference}`
-        );
         res.json({
           success: true,
           message: `${response.message} - You will pay ${totalAmount} EGP (${topUpAmount} EGP top-up + ${serviceFee} EGP 12% service fee)`,
@@ -337,15 +460,32 @@ app.post(
           topUpAmount: topUpAmount,
           serviceFee: serviceFee,
           totalAmount: totalAmount,
-          uquidProduct: selectedProduct, // Store product info for later use
+          uquidProducts: selectedProducts, // Store all product info for later use (multiple products for splits)
+          apiCallSplits: apiCallSplits, // Store split information
+          totalRequiredBalance: totalRequiredBalance, // Store total balance required
           uquidBalance: availableBalance, // Store balance info for later use
         });
       } else {
         throw new Error(response.message || "Failed to create payment");
       }
     } catch (error) {
-      console.error("[PAYMENT FLOW] Error in payment creation:", error.message);
-      res.status(500).json({ success: false, message: error.message });
+      const totalFlowDuration = Date.now() - flowStartTime;
+
+      // Log detailed error context for debugging
+      logger.error(`[PAYMENT-${flowId}] Payment flow error:`, {
+        error: error.message,
+        flowId,
+        duration: totalFlowDuration,
+        ip: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+
+      res.status(500).json({
+        success: false,
+        message: error.message,
+        flowId,
+        duration: totalFlowDuration,
+      });
     }
   }
 );
@@ -373,12 +513,7 @@ app.post(
           confirmRequestBody,
           false // Use public key for confirm
         );
-        console.log(`[SHA7NAWY] Confirm API successful`);
       } catch (confirmError) {
-        console.error(
-          `[SHA7NAWY] Confirm API failed (continuing anyway):`,
-          confirmError.message
-        );
         // Continue with payment info check even if confirm fails
       }
 
@@ -399,7 +534,6 @@ app.post(
       }
 
       const paymentStatus = sha7nawyResponse.data.status?.toLowerCase();
-      console.log(`[SHA7NAWY] Payment status: ${paymentStatus}`);
 
       // Check if payment is completed successfully
       if (
@@ -407,13 +541,12 @@ app.post(
         paymentStatus === "success" ||
         paymentStatus === "paid"
       ) {
-        console.log("[SHA7NAWY] Payment completed successfully");
+        // Payment completed successfully
       } else if (
         paymentStatus === "rejected" ||
         paymentStatus === "failed" ||
         paymentStatus === "cancelled"
       ) {
-        console.log(`[SHA7NAWY] Payment was ${paymentStatus}`);
         return res.status(400).json({
           success: false,
           message: `Payment was ${paymentStatus}. Transaction stopped.`,
@@ -423,7 +556,6 @@ app.post(
         paymentStatus === "pending" ||
         paymentStatus === "processing"
       ) {
-        console.log(`[SHA7NAWY] Payment is still ${paymentStatus}`);
         return res.status(202).json({
           success: false,
           message: `Payment is still ${paymentStatus}. Please wait and try again.`,
@@ -431,7 +563,6 @@ app.post(
           shouldRetry: true,
         });
       } else {
-        console.log(`[SHA7NAWY] Unknown payment status: ${paymentStatus}`);
         return res.status(400).json({
           success: false,
           message: `Unknown payment status: ${paymentStatus}`,
@@ -446,13 +577,9 @@ app.post(
       const topUpAmount = parseFloat(totalPaidAmount) / 1.12; // Remove 12% fee
       const serviceFee = parseFloat(totalPaidAmount) - topUpAmount;
 
-      console.log(
-        `[UQUID] Step 4: Processing top-up after Sha7nawy confirmation: ${topUpAmount} EGP`
-      );
-
-      // --- STEP 4: After confirmation from Sha7nawy, order from Uquid and finish the process ---
-      // Note: We need to get the product info again since we don't store it in the session
-      // In a production environment, you might want to store this in a database or cache
+      // After confirmation from Sha7nawy, process multiple orders from Uquid
+      // Recalculate splits and get products for confirmed payment
+      const apiCallSplits = calculateApiCallSplit(topUpAmount);
 
       const productsResponse = await makeUquidRequest({
         action: "queryProductList",
@@ -474,17 +601,11 @@ app.post(
         throw new Error("No Vodafone Egypt products found on Uquid.");
       }
 
-      // Find the product with the exact face value
-      const selectedProduct = vodafoneProducts.find(
-        (p) => p.extra?.range?.currentFace === topUpAmount
+      // Validate and get products for all splits
+      const { selectedProducts } = await validateAndGetSplitProducts(
+        apiCallSplits,
+        vodafoneProducts
       );
-
-      if (!selectedProduct) {
-        throw new Error(
-          `No suitable Uquid product found for amount ${topUpAmount} EGP.`
-        );
-      }
-      console.log(`[UQUID] Selected product: ${selectedProduct.name}`);
 
       // Format phone number for Uquid (remove leading 0 and add Egypt country code)
       const cleanPhone = phoneNumber.replace(/\D/g, ""); // Remove all non-digit characters
@@ -504,59 +625,116 @@ app.post(
         formattedPhone = cleanPhone;
       }
 
-      const submitOrderBody = {
-        action: "submitOrder",
-        nonce: Math.round(Date.now() / 1000),
-        params: {
-          _order_product_id: selectedProduct.id,
-          _order_coin: "usdt", // Using USDT instead of UQC
-          _order_mode: "live", // This is a real purchase
-          _order_quantity: "1", // Convert to string
-          _order_value: Math.round(topUpAmount).toString(), // Ensure integer value as string
-          _order_force_mode: "live", // Add required force mode parameter
-          mobile_number: formattedPhone, // Use formatted international number
-        },
-      };
+      // Submit multiple orders based on splits
+      const orderResults = [];
 
-      const uquidSubmitResponse = await makeUquidRequest(submitOrderBody);
+      for (let i = 0; i < selectedProducts.length; i++) {
+        const product = selectedProducts[i];
+        const split = apiCallSplits[i];
 
-      if (!uquidSubmitResponse.status || !uquidSubmitResponse.data.batch_id) {
-        throw new Error(
-          uquidSubmitResponse.message || "Failed to submit Uquid order."
-        );
+        for (let j = 0; j < split.count; j++) {
+          const submitOrderBody = {
+            action: "submitOrder",
+            nonce: Math.round(Date.now() / 1000),
+            params: {
+              _order_product_id: product.id,
+              _order_coin: "usdt",
+              _order_mode: "live",
+              _order_quantity: "1",
+              _order_value: Math.round(split.amount).toString(),
+              _order_force_mode: "live",
+              mobile_number: formattedPhone,
+            },
+          };
+
+          const uquidSubmitResponse = await makeUquidRequest(submitOrderBody);
+
+          if (
+            !uquidSubmitResponse.status ||
+            !uquidSubmitResponse.data.batch_id
+          ) {
+            throw new Error(
+              `Failed to submit Uquid order ${orderResults.length + 1}: ${
+                uquidSubmitResponse.message || "Unknown error"
+              }`
+            );
+          }
+
+          const batchId = uquidSubmitResponse.data.batch_id;
+          orderResults.push({
+            batchId,
+            amount: split.amount,
+            productName: product.name,
+            submitResponse: uquidSubmitResponse.data,
+          });
+
+          // Add delay between orders (500ms)
+          if (
+            orderResults.length <
+            selectedProducts.reduce((total, p) => total + p.requestedCount, 0)
+          ) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+        }
       }
-      const batchId = uquidSubmitResponse.data.batch_id;
-      console.log(`[UQUID] Order submitted. Batch ID: ${batchId}`);
 
-      // --- STEP 5: Confirm the order with Uquid ---
-      const confirmOrderBody = {
-        action: "confirmOrder",
-        nonce: Math.round(Date.now() / 1000),
-        params: { batch_id: batchId },
-      };
+      // Confirm all orders
+      const confirmationResults = [];
 
-      const uquidConfirmResponse = await makeUquidRequest(confirmOrderBody);
+      for (let i = 0; i < orderResults.length; i++) {
+        const order = orderResults[i];
 
-      if (!uquidConfirmResponse.status) {
-        console.warn(
-          `[UQUID] Order confirmation may have failed. Batch ID: ${batchId}`
-        );
+        const confirmOrderBody = {
+          action: "confirmOrder",
+          nonce: Math.round(Date.now() / 1000),
+          params: { batch_id: order.batchId },
+        };
+
+        try {
+          const confirmResponse = await makeUquidRequest(confirmOrderBody);
+          confirmationResults.push({
+            batchId: order.batchId,
+            amount: order.amount,
+            confirmed: confirmResponse.status,
+            response: confirmResponse.data,
+          });
+
+          // Order confirmation status is tracked in confirmationResults
+        } catch (error) {
+          confirmationResults.push({
+            batchId: order.batchId,
+            amount: order.amount,
+            confirmed: false,
+            error: error.message,
+          });
+        }
+
+        // Add delay between confirmations (500ms)
+        if (i < orderResults.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
       }
 
-      console.log("[UQUID] Top-up successful - Process completed!");
       res.json({
         success: true,
         message: "Top-up successful!",
         sha7nawyTransaction: sha7nawyResponse.data,
-        uquidOrder: uquidConfirmResponse.data || {
-          batch_id: batchId,
-          status: "processing",
-        },
+        uquidOrders: orderResults, // Array of all order results
+        confirmationResults: confirmationResults, // Array of all confirmation results
+        uquidOrder: orderResults[0]
+          ? {
+              // For frontend compatibility, provide first order
+              batch_id: orderResults[0].batchId,
+              status: "processing",
+            }
+          : null,
         transaction: {
           topUpAmount: Math.round(topUpAmount * 100) / 100, // Round to 2 decimal places
           serviceFee: Math.round(serviceFee * 100) / 100,
           totalPaid: parseFloat(totalPaidAmount),
           phoneNumber: phoneNumber,
+          totalOrders: orderResults.length,
+          totalConfirmed: confirmationResults.filter((c) => c.confirmed).length,
         },
       });
     } catch (error) {
@@ -596,7 +774,7 @@ app.get("/api/payment/info/:transactionId", async (req, res) => {
       throw new Error(response.message || "Failed to get payment info");
     }
   } catch (error) {
-    console.error("[SHA7NAWY] Error getting payment info:", error);
+    logger.error("[SHA7NAWY] Error getting payment info:", error.message);
     res.status(500).json({
       success: false,
       message: error.message || "Failed to get payment info",
@@ -654,7 +832,7 @@ app.get("/api/vodafone/products", async (req, res) => {
       total: allVodafoneProducts.length,
     });
   } catch (error) {
-    console.error("[UQUID] Error fetching products:", error);
+    logger.error("[UQUID] Error fetching products:", error.message);
     res.status(500).json({
       success: false,
       message: error.message || "Failed to fetch Vodafone products",
@@ -699,10 +877,10 @@ app.post("/api/vodafone/submit-order", async (req, res) => {
     }
 
     // Validate amount
-    if (amount < 5 || amount > 1000) {
+    if (amount < 5 || amount > 2000) {
       return res.status(400).json({
         success: false,
-        message: "Amount must be between 5 and 1000 EGP",
+        message: "Amount must be between 5 and 2000 EGP",
       });
     }
 
@@ -805,7 +983,7 @@ app.post("/api/vodafone/submit-order", async (req, res) => {
       throw new Error(response.message || "Failed to submit order");
     }
   } catch (error) {
-    console.error("[UQUID] Error submitting order:", error);
+    logger.error("[UQUID] Error submitting order:", error.message);
     res.status(500).json({
       success: false,
       message: error.message || "Failed to submit order",
@@ -844,7 +1022,7 @@ app.post("/api/vodafone/confirm-order", async (req, res) => {
       throw new Error(response.message || "Failed to confirm order");
     }
   } catch (error) {
-    console.error("[UQUID] Error confirming order:", error);
+    logger.error("[UQUID] Error confirming order:", error.message);
     res.status(500).json({
       success: false,
       message: error.message || "Failed to confirm order",
@@ -876,7 +1054,7 @@ app.get("/api/vodafone/order-status/:batchId", async (req, res) => {
       throw new Error(response.message || "Failed to check order status");
     }
   } catch (error) {
-    console.error("[UQUID] Error checking order status:", error);
+    logger.error("[UQUID] Error checking order status:", error.message);
     res.status(500).json({
       success: false,
       message: error.message || "Failed to check order status",
@@ -903,7 +1081,7 @@ app.get("/api/account/balance", async (req, res) => {
       throw new Error(response.message || "Failed to get account balance");
     }
   } catch (error) {
-    console.error("[UQUID] Error getting account balance:", error);
+    logger.error("[UQUID] Error getting account balance:", error.message);
     res.status(500).json({
       success: false,
       message: error.message || "Failed to get account balance",
@@ -917,10 +1095,10 @@ app.get("/api/uquid/products/check/:amount", async (req, res) => {
     const { amount } = req.params;
     const topUpAmount = parseFloat(amount);
 
-    if (isNaN(topUpAmount) || topUpAmount < 5 || topUpAmount > 1000) {
+    if (isNaN(topUpAmount) || topUpAmount < 5 || topUpAmount > 2000) {
       return res.status(400).json({
         success: false,
-        message: "Invalid amount. Must be between 5 and 1000 EGP",
+        message: "Invalid amount. Must be between 5 and 2000 EGP",
       });
     }
 
@@ -952,7 +1130,7 @@ app.get("/api/uquid/products/check/:amount", async (req, res) => {
       totalProducts: vodafoneProducts.length,
     });
   } catch (error) {
-    console.error("[UQUID] Error checking product availability:", error);
+    logger.error("[UQUID] Error checking product availability:", error.message);
     res.status(500).json({
       success: false,
       message: error.message || "Failed to check product availability",
@@ -1012,13 +1190,24 @@ app.get("*", (req, res) => {
 });
 
 // Global error handling middleware
-app.use((err, req, res) => {
-  logger.error("[SERVER] Unhandled error:", {
+app.use((err, req, res, next) => {
+  const errorId = Math.random().toString(36).substring(7);
+
+  logger.error(`[ERROR-${errorId}] Unhandled server error:`, {
     error: err.message,
     stack: err.stack,
     url: req.url,
     method: req.method,
     ip: req.ip,
+    userAgent: req.headers["user-agent"],
+    timestamp: new Date().toISOString(),
+    body: req.body,
+    query: req.query,
+    params: req.params,
+    headers: {
+      ...req.headers,
+      authorization: req.headers.authorization ? "REDACTED" : undefined,
+    },
   });
 
   // Don't leak error details in production
@@ -1028,7 +1217,15 @@ app.use((err, req, res) => {
   res.status(err.status || 500).json({
     success: false,
     message,
-    ...(NODE_ENV !== "production" && { stack: err.stack }),
+    errorId,
+    timestamp: new Date().toISOString(),
+    ...(NODE_ENV !== "production" && {
+      stack: err.stack,
+      details: {
+        url: req.url,
+        method: req.method,
+      },
+    }),
   });
 });
 
@@ -1055,6 +1252,36 @@ const gracefulShutdown = (signal) => {
 
 // Start server
 const server = app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 [SERVER] === APPLICATION STARTUP COMPLETED ===`);
+  console.log(`🌐 [SERVER] Running on port ${PORT} in ${NODE_ENV} mode`);
+  console.log(
+    `🔑 [UQUID] API Key: ${UQUID_API_KEY ? "✅ Loaded" : "❌ Missing"}`
+  );
+  console.log(
+    `🔑 [SHA7NAWY] Public Key: ${
+      SHA7NAWY_PUBLIC_KEY ? "✅ Loaded" : "❌ Missing"
+    }`
+  );
+  console.log(
+    `🔑 [SHA7NAWY] Secret Key: ${
+      SHA7NAWY_SECRET_KEY ? "✅ Loaded" : "❌ Missing"
+    }`
+  );
+
+  if (NODE_ENV === "production") {
+    console.log(`⚡ [SERVER] Production optimizations enabled`);
+  } else {
+    console.log(`🛠️ [SERVER] Development mode - Enhanced debugging enabled`);
+  }
+
+  console.log(
+    `📡 [SERVER] API endpoints available at http://localhost:${PORT}/api/`
+  );
+  console.log(`💻 [SERVER] Frontend served at http://localhost:${PORT}/`);
+  console.log(
+    `🏥 [SERVER] Health check at http://localhost:${PORT}/api/health`
+  );
+
   logger.info(`[SERVER] Running on port ${PORT} in ${NODE_ENV} mode`);
   logger.info(`[UQUID] API Key: ${UQUID_API_KEY ? "Loaded" : "Missing"}`);
   logger.info(
