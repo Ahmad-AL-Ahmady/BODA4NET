@@ -206,6 +206,19 @@ function App() {
   const startPaymentStatusCheck = (paymentId, reference) => {
     setPaymentStep("checking-status");
 
+    // Add timeout to prevent infinite polling (5 minutes)
+    const timeout = setTimeout(() => {
+      clearInterval(checkInterval);
+      setError("انتهت مهلة التحقق من الدفع. يرجى المحاولة مرة أخرى.");
+      setPaymentStep("invoice");
+      Swal.fire({
+        icon: "warning",
+        title: "انتهت المهلة",
+        text: "انتهت مهلة التحقق من الدفع. يرجى المحاولة مرة أخرى.",
+        confirmButtonText: "حسناً",
+      });
+    }, 5 * 60 * 1000); // 5 minutes
+
     const checkInterval = setInterval(async () => {
       try {
         const response = await fetch(
@@ -226,8 +239,29 @@ function App() {
           return;
         }
 
-        // Clear the interval as we have a final result (success or failure)
+        if (response.status === 409 && data.duplicate) {
+          // Payment was already processed, treat as success
+          clearInterval(checkInterval);
+          clearTimeout(timeout);
+          setPaymentStep("completed");
+          Swal.fire({
+            icon: "info",
+            title: "تم معالجة الدفع مسبقاً",
+            text: "هذا الدفع تم معالجته بنجاح من قبل. لا داعي للقلق.",
+            confirmButtonText: "حسناً",
+          });
+
+          // Reset form
+          setShowInvoice(false);
+          setPhoneNumber("");
+          setAmount("");
+          resetPaymentFlow();
+          return;
+        }
+
+        // Clear the interval and timeout as we have a final result (success or failure)
         clearInterval(checkInterval);
+        clearTimeout(timeout);
 
         if (data.success) {
           // Payment completed and top-up successful

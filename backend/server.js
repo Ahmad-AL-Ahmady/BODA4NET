@@ -19,6 +19,29 @@ import {
 } from "./middleware/security.js";
 import logger, { requestLogger, logTransaction } from "./middleware/logger.js";
 
+// In-memory transaction tracking to prevent duplicate processing
+const processedTransactions = new Map();
+
+// Helper function to check if transaction was already processed
+const isTransactionProcessed = (paymentId, reference) => {
+  const key = `${paymentId}-${reference}`;
+  return processedTransactions.has(key);
+};
+
+// Helper function to mark transaction as processed
+const markTransactionProcessed = (paymentId, reference) => {
+  const key = `${paymentId}-${reference}`;
+  processedTransactions.set(key, {
+    timestamp: new Date().toISOString(),
+    processed: true,
+  });
+
+  // Clean up old entries after 24 hours to prevent memory leaks
+  setTimeout(() => {
+    processedTransactions.delete(key);
+  }, 24 * 60 * 60 * 1000);
+};
+
 // ES module compatibility
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -627,6 +650,22 @@ app.post(
       });
     }
 
+    // Check if this transaction was already processed
+    if (isTransactionProcessed(paymentId, reference)) {
+      logger.warn(`[TRANSACTION] ⚠️ Duplicate transaction attempt:`, {
+        paymentId,
+        reference,
+        timestamp: new Date().toISOString(),
+      });
+
+      return res.status(409).json({
+        success: false,
+        message:
+          "This payment has already been processed. Duplicate request ignored.",
+        duplicate: true,
+      });
+    }
+
     try {
       logger.info(`[TRANSACTION] 🔄 Starting payment check and process:`, {
         paymentId,
@@ -936,6 +975,9 @@ app.post(
         totalConfirmed: confirmationResults.filter((c) => c.confirmed).length,
       };
 
+      // Mark transaction as processed to prevent duplicates
+      markTransactionProcessed(paymentId, reference);
+
       logger.info(`[TRANSACTION] 🎉 Transaction completed successfully:`, {
         ...finalTransaction,
         phoneNumber: finalTransaction.phoneNumber
@@ -978,6 +1020,9 @@ app.post(
         { paymentId, reference, error: error.message },
         false
       );
+
+      // Don't mark as processed if there was an error
+      // This allows retry on the next polling attempt
       res.status(500).json({
         success: false,
         message: error.message,
