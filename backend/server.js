@@ -6,6 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import compression from "compression";
 import morgan from "morgan";
+
 import {
   securityHeaders,
   createRateLimit,
@@ -33,7 +34,9 @@ app.set("trust proxy", 1);
 
 // Global Middleware
 app.use(compression()); // Gzip compression
-app.use(securityHeaders); // Security headers
+
+// Security headers
+app.use(securityHeaders);
 
 // Morgan HTTP request logging
 app.use(
@@ -232,6 +235,13 @@ async function makeUquidRequest(requestBody) {
     const signature = generateSignature(requestBody, UQUID_API_SECRET);
     const url = `${UQUID_BASE_URL}?api_key=${UQUID_API_KEY}&signature=${signature}`;
 
+    logger.info(`[UQUID-${requestId}] Making API request:`, {
+      action: requestBody.action,
+      url: url.substring(0, 50) + "...",
+      hasSignature: !!signature,
+      timestamp: new Date().toISOString(),
+    });
+
     const response = await axios.post(url, requestBody, {
       headers: {
         "Content-Type": "application/json",
@@ -240,6 +250,15 @@ async function makeUquidRequest(requestBody) {
     });
 
     const duration = Date.now() - startTime;
+
+    logger.info(`[UQUID-${requestId}] API response received:`, {
+      action: requestBody.action,
+      status: response.status,
+      statusText: response.statusText,
+      duration,
+      hasData: !!response.data,
+      dataKeys: response.data ? Object.keys(response.data) : [],
+    });
 
     return response.data;
   } catch (error) {
@@ -298,8 +317,25 @@ async function makeSha7nawyRequest(
       options.body = JSON.stringify(requestBody);
     }
 
+    logger.info(`[SHA7NAWY-${requestId}] Making API request:`, {
+      endpoint,
+      method: options.method,
+      url,
+      hasAuthKey: !!authKey,
+      hasRequestBody: !!requestBody,
+      timestamp: new Date().toISOString(),
+    });
+
     const response = await fetch(url, options);
     const duration = Date.now() - startTime;
+
+    logger.info(`[SHA7NAWY-${requestId}] API response received:`, {
+      endpoint,
+      status: response.status,
+      statusText: response.statusText,
+      duration,
+      ok: response.ok,
+    });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -346,18 +382,83 @@ app.post(
     const flowStartTime = Date.now();
 
     try {
-      const { phoneNumber, amount } = req.body;
+      const { phoneNumber, vodafoneCashNumber, amount } = req.body;
 
-      if (!phoneNumber || !amount) {
+      logger.info(`[PAYMENT-${flowId}] 🚀 Payment flow started:`, {
+        flowId,
+        phoneNumber: phoneNumber
+          ? phoneNumber.substring(0, 3) + "***" + phoneNumber.substring(8)
+          : "missing",
+        vodafoneCashNumber: vodafoneCashNumber
+          ? vodafoneCashNumber.substring(0, 3) +
+            "***" +
+            vodafoneCashNumber.substring(8)
+          : "missing",
+        amount,
+        ip: req.ip,
+        userAgent: req.headers["user-agent"],
+        timestamp: new Date().toISOString(),
+      });
+
+      if (!phoneNumber || !vodafoneCashNumber || !amount) {
+        logger.error(`[PAYMENT-${flowId}] ❌ Missing required fields:`, {
+          phoneNumber: !!phoneNumber,
+          vodafoneCashNumber: !!vodafoneCashNumber,
+          amount: !!amount,
+        });
+
         return res.status(400).json({
           success: false,
-          message: "Phone number and amount are required",
+          message:
+            "Phone number, Vodafone Cash number, and amount are required",
+          flowId,
+          debug: {
+            receivedFields: {
+              phoneNumber: !!phoneNumber,
+              vodafoneCashNumber: !!vodafoneCashNumber,
+              amount: !!amount,
+            },
+          },
         });
       }
       if (!/^010[0-9]{8}$/.test(phoneNumber)) {
+        logger.error(`[PAYMENT-${flowId}] ❌ Invalid phone number format:`, {
+          phoneNumber:
+            phoneNumber.substring(0, 3) + "***" + phoneNumber.substring(8),
+          format: "Should be 010XXXXXXXX",
+        });
+
         return res.status(400).json({
           success: false,
-          message: "Invalid Vodafone Egypt number format",
+          message: "Invalid phone number format (must be Vodafone Egypt)",
+          flowId,
+          debug: {
+            phoneNumberLength: phoneNumber.length,
+            startsWithCorrectPrefix: phoneNumber.startsWith("010"),
+          },
+        });
+      }
+      if (!/^010[0-9]{8}$/.test(vodafoneCashNumber)) {
+        logger.error(
+          `[PAYMENT-${flowId}] ❌ Invalid Vodafone Cash number format:`,
+          {
+            vodafoneCashNumber:
+              vodafoneCashNumber.substring(0, 3) +
+              "***" +
+              vodafoneCashNumber.substring(8),
+            format: "Should be 010XXXXXXXX",
+          }
+        );
+
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid Vodafone Cash number format (must be Vodafone Egypt)",
+          flowId,
+          debug: {
+            vodafoneCashNumberLength: vodafoneCashNumber.length,
+            startsWithCorrectPrefix: vodafoneCashNumber.startsWith("010"),
+          },
         });
       }
       if (amount < 5 || amount > 2000) {
@@ -367,24 +468,48 @@ app.post(
         });
       }
 
-      // Calculate total amount with 12% service fee
+      // Calculate total amount with 20% service fee
       const topUpAmount = roundToTwo(parseFloat(amount));
-      const serviceFee = roundToTwo(topUpAmount * 0.12); // 12% fee
+      const serviceFee = roundToTwo(topUpAmount * 0.2); // 20% fee
       const totalAmount = roundToTwo(topUpAmount + serviceFee);
+
+      logger.info(`[PAYMENT-${flowId}] 💰 Amount calculations:`, {
+        originalAmount: amount,
+        topUpAmount,
+        serviceFee,
+        totalAmount,
+      });
 
       // Calculate API call splits for large amounts
       const apiCallSplits = calculateApiCallSplit(topUpAmount);
 
+      logger.info(`[PAYMENT-${flowId}] 🔄 API call splits calculated:`, {
+        splitsCount: apiCallSplits.length,
+        splits: apiCallSplits,
+      });
+
       // Check for products using the split amounts (Uquid product validation)
 
       const step1StartTime = Date.now();
+      logger.info(`[PAYMENT-${flowId}] 📦 Step 1: Fetching Uquid products...`);
+
       const productsResponse = await makeUquidRequest({
         action: "queryProductList",
         nonce: Math.round(Date.now() / 1000),
         params: { page: 1 },
       });
 
+      logger.info(`[PAYMENT-${flowId}] 📦 Product fetch result:`, {
+        success: productsResponse.status,
+        itemsCount: productsResponse.data?.items?.length || 0,
+        duration: Date.now() - step1StartTime,
+      });
+
       if (!productsResponse.status || !productsResponse.data?.items) {
+        logger.error(
+          `[PAYMENT-${flowId}] ❌ Failed to fetch product list from Uquid:`,
+          productsResponse
+        );
         throw new Error("Could not fetch product list from Uquid.");
       }
 
@@ -426,12 +551,23 @@ app.post(
 
       // Start the Sha7nawy process
       const requestBody = {
-        number: phoneNumber,
+        number: vodafoneCashNumber, // Use Vodafone Cash number for payment
         amount: totalAmount,
         method: "vfcash",
-        client: `User: ${phoneNumber}`,
-        details: `Vodafone Egypt Top-up ${topUpAmount} EGP (+ ${serviceFee} EGP 12% service fee)`,
+        client: `User: ${vodafoneCashNumber} (Recharge: ${phoneNumber})`,
+        details: `Vodafone Egypt Top-up ${topUpAmount} EGP (+ ${serviceFee} EGP 20% service fee) - Recharge phone: ${phoneNumber}`,
       };
+
+      logger.info(`[PAYMENT-${flowId}] 💳 Sha7nawy request body:`, {
+        number:
+          requestBody.number.substring(0, 3) +
+          "***" +
+          requestBody.number.substring(8),
+        amount: requestBody.amount,
+        method: requestBody.method,
+        client: requestBody.client,
+        details: requestBody.details,
+      });
 
       const response = await makeSha7nawyRequest(
         "/payment/create",
@@ -441,7 +577,7 @@ app.post(
       if (response.status && response.data) {
         res.json({
           success: true,
-          message: `${response.message} - You will pay ${totalAmount} EGP (${topUpAmount} EGP top-up + ${serviceFee} EGP 12% service fee)`,
+          message: `${response.message} - You will pay ${totalAmount} EGP (${topUpAmount} EGP top-up + ${serviceFee} EGP 20% service fee)`,
           reference: response.data.reference,
           paymentId: response.data.id, // Payment ID for status checking
           topUpAmount: topUpAmount,
@@ -492,15 +628,31 @@ app.post(
     }
 
     try {
+      logger.info(`[TRANSACTION] 🔄 Starting payment check and process:`, {
+        paymentId,
+        reference,
+        timestamp: new Date().toISOString(),
+      });
+
       // --- STEP 1: ALWAYS run the confirm API first ---
       try {
+        logger.info(
+          `[TRANSACTION] 📞 Step 1: Confirming payment with Sha7nawy...`
+        );
         const confirmRequestBody = { ref_code: reference };
         await makeSha7nawyRequest(
           "/payment/confirm",
           confirmRequestBody,
           false // Use public key for confirm
         );
+        logger.info(`[TRANSACTION] ✅ Payment confirmation successful`);
       } catch (confirmError) {
+        logger.warn(
+          `[TRANSACTION] ⚠️ Payment confirmation failed, continuing:`,
+          {
+            error: confirmError.message,
+          }
+        );
         // Continue with payment info check even if confirm fails
       }
 
@@ -508,11 +660,20 @@ app.post(
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // --- STEP 2: ALWAYS check actual payment status with Get Payment Info ---
+      logger.info(
+        `[TRANSACTION] 📋 Step 2: Checking payment status with Sha7nawy...`
+      );
       const sha7nawyResponse = await makeSha7nawyRequest(
         `/payment/${paymentId}`,
         null,
         true // Use secret key for payment info
       );
+
+      logger.info(`[TRANSACTION] 📋 Payment status response:`, {
+        success: sha7nawyResponse.status,
+        status: sha7nawyResponse.data?.status,
+        hasData: !!sha7nawyResponse.data,
+      });
 
       if (!sha7nawyResponse.status || !sha7nawyResponse.data) {
         throw new Error(
@@ -557,16 +718,48 @@ app.post(
         });
       }
 
-      const { amount: totalPaidAmount, number: phoneNumber } =
+      const { amount: totalPaidAmount, number: vodafoneCashNumber } =
         sha7nawyResponse.data;
 
-      // Calculate the original top-up amount (excluding 12% service fee)
-      const topUpAmount = roundToTwo(parseFloat(totalPaidAmount) / 1.12); // Remove 12% fee
+      // Extract the original phone number to recharge from the payment details
+      // Since we stored it in the details field, we need to extract it
+      const detailsText = sha7nawyResponse.data.details || "";
+      const phoneNumberMatch = detailsText.match(/Recharge phone: (\d+)/);
+      const phoneNumber = phoneNumberMatch
+        ? phoneNumberMatch[1]
+        : vodafoneCashNumber;
+
+      logger.info(`[TRANSACTION] 📱 Extracted phone numbers:`, {
+        vodafoneCashNumber: vodafoneCashNumber
+          ? vodafoneCashNumber.substring(0, 3) +
+            "***" +
+            vodafoneCashNumber.substring(8)
+          : "missing",
+        phoneNumber: phoneNumber
+          ? phoneNumber.substring(0, 3) + "***" + phoneNumber.substring(8)
+          : "missing",
+        totalPaidAmount,
+      });
+
+      // Calculate the original top-up amount (excluding 20% service fee)
+      const topUpAmount = roundToTwo(parseFloat(totalPaidAmount) / 1.2); // Remove 20% fee
       const serviceFee = roundToTwo(parseFloat(totalPaidAmount) - topUpAmount);
+
+      logger.info(`[TRANSACTION] 💰 Calculated amounts:`, {
+        totalPaidAmount,
+        topUpAmount,
+        serviceFee,
+      });
 
       // After confirmation from Sha7nawy, process multiple orders from Uquid
       // Recalculate splits and get products for confirmed payment
+      logger.info(`[TRANSACTION] 🔄 Step 3: Processing Uquid orders...`);
       const apiCallSplits = calculateApiCallSplit(topUpAmount);
+
+      logger.info(`[TRANSACTION] 🔄 API call splits for confirmed payment:`, {
+        splitsCount: apiCallSplits.length,
+        splits: apiCallSplits,
+      });
 
       const productsResponse = await makeUquidRequest({
         action: "queryProductList",
@@ -613,11 +806,30 @@ app.post(
       }
 
       // Submit multiple orders based on splits
+      logger.info(
+        `[TRANSACTION] 📦 Submitting ${selectedProducts.length} orders to Uquid...`
+      );
       const orderResults = [];
 
       for (let i = 0; i < selectedProducts.length; i++) {
         const product = selectedProducts[i];
         const split = apiCallSplits[i];
+
+        logger.info(
+          `[TRANSACTION] 📦 Submitting order ${i + 1}/${
+            selectedProducts.length
+          }:`,
+          {
+            productId: product.id,
+            productName: product.name,
+            amount: split.amount,
+            count: split.count,
+            formattedPhone:
+              formattedPhone.substring(0, 3) +
+              "***" +
+              formattedPhone.substring(8),
+          }
+        );
 
         for (let j = 0; j < split.count; j++) {
           const submitOrderBody = {
@@ -666,10 +878,22 @@ app.post(
       }
 
       // Confirm all orders
+      logger.info(
+        `[TRANSACTION] ✅ Confirming ${orderResults.length} orders...`
+      );
       const confirmationResults = [];
 
       for (let i = 0; i < orderResults.length; i++) {
         const order = orderResults[i];
+
+        logger.info(
+          `[TRANSACTION] ✅ Confirming order ${i + 1}/${orderResults.length}:`,
+          {
+            batchId: order.batchId,
+            amount: order.amount,
+            productName: order.productName,
+          }
+        );
 
         const confirmOrderBody = {
           action: "confirmOrder",
@@ -702,6 +926,30 @@ app.post(
         }
       }
 
+      const finalTransaction = {
+        topUpAmount: Math.round(topUpAmount * 100) / 100, // Round to 2 decimal places
+        serviceFee: Math.round(serviceFee * 100) / 100,
+        totalPaid: parseFloat(totalPaidAmount),
+        phoneNumber: phoneNumber, // Phone number that was recharged
+        vodafoneCashNumber: vodafoneCashNumber, // Vodafone Cash number used for payment
+        totalOrders: orderResults.length,
+        totalConfirmed: confirmationResults.filter((c) => c.confirmed).length,
+      };
+
+      logger.info(`[TRANSACTION] 🎉 Transaction completed successfully:`, {
+        ...finalTransaction,
+        phoneNumber: finalTransaction.phoneNumber
+          ? finalTransaction.phoneNumber.substring(0, 3) +
+            "***" +
+            finalTransaction.phoneNumber.substring(8)
+          : "missing",
+        vodafoneCashNumber: finalTransaction.vodafoneCashNumber
+          ? finalTransaction.vodafoneCashNumber.substring(0, 3) +
+            "***" +
+            finalTransaction.vodafoneCashNumber.substring(8)
+          : "missing",
+      });
+
       res.json({
         success: true,
         message: "Top-up successful!",
@@ -715,27 +963,30 @@ app.post(
               status: "processing",
             }
           : null,
-        transaction: {
-          topUpAmount: Math.round(topUpAmount * 100) / 100, // Round to 2 decimal places
-          serviceFee: Math.round(serviceFee * 100) / 100,
-          totalPaid: parseFloat(totalPaidAmount),
-          phoneNumber: phoneNumber,
-          totalOrders: orderResults.length,
-          totalConfirmed: confirmationResults.filter((c) => c.confirmed).length,
-        },
+        transaction: finalTransaction,
       });
     } catch (error) {
       logger.error("[TRANSACTION] Failed:", {
         error: error.message,
         paymentId,
         reference,
+        stack: error.stack,
+        timestamp: new Date().toISOString(),
       });
       logTransaction(
         "uquid_topup",
         { paymentId, reference, error: error.message },
         false
       );
-      res.status(500).json({ success: false, message: error.message });
+      res.status(500).json({
+        success: false,
+        message: error.message,
+        debug: {
+          paymentId,
+          reference,
+          timestamp: new Date().toISOString(),
+        },
+      });
     }
   }
 );

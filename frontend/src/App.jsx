@@ -19,6 +19,7 @@ const API_BASE_URL =
 
 function App() {
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [vodafoneCashNumber, setVodafoneCashNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [landlineNumber, setLandlineNumber] = useState("");
   const [internetPackage, setInternetPackage] = useState("");
@@ -33,23 +34,24 @@ function App() {
   const [error, setError] = useState("");
 
   const handleBalanceRecharge = () => {
-    if (!phoneNumber || !amount) {
+    if (!phoneNumber || !vodafoneCashNumber || !amount) {
       Swal.fire({
         icon: "warning",
         title: "معلومات ناقصة",
-        text: "يرجى إدخال رقم الهاتف واختيار المبلغ",
+        text: "يرجى إدخال رقم الهاتف ورقم فودافون كاش واختيار المبلغ",
         confirmButtonText: "حسناً",
       });
       return;
     }
 
     const parsedAmount = parseFloat(amount);
-    const serviceFee = parsedAmount * 0.12;
+    const serviceFee = parsedAmount * 0.2;
     const totalAmount = parsedAmount + serviceFee;
 
     setInvoiceData({
       type: "mobile",
       number: phoneNumber,
+      vodafoneCashNumber: vodafoneCashNumber,
       amount: parsedAmount,
       serviceFee: serviceFee,
       totalAmount: totalAmount,
@@ -97,7 +99,7 @@ function App() {
         return;
     }
 
-    const serviceFee = packageAmount * 0.12;
+    const serviceFee = packageAmount * 0.2;
     const totalAmount = packageAmount + serviceFee;
 
     setInvoiceData({
@@ -150,6 +152,7 @@ function App() {
         },
         body: JSON.stringify({
           phoneNumber: invoiceData.number,
+          vodafoneCashNumber: invoiceData.vodafoneCashNumber,
           amount: invoiceData.amount, // Original amount without service fee
         }),
       });
@@ -223,7 +226,7 @@ function App() {
           return;
         }
 
-        // Clear the interval as we have a final result
+        // Clear the interval as we have a final result (success or failure)
         clearInterval(checkInterval);
 
         if (data.success) {
@@ -250,6 +253,18 @@ function App() {
                     data.transaction.phoneNumber
                   }</span>
                 </p>
+                ${
+                  data.transaction.vodafoneCashNumber &&
+                  data.transaction.vodafoneCashNumber !==
+                    data.transaction.phoneNumber
+                    ? `
+                <p style="font-size: 1.1em; margin: 10px 0;">
+                  <strong>رقم فودافون كاش المستخدم:</strong> 
+                  <span style="color: #007bff; font-weight: bold;">${data.transaction.vodafoneCashNumber}</span>
+                </p>
+                `
+                    : ""
+                }
                 <p style="font-size: 1em; margin: 10px 0; color: #6c757d;">
                   <strong>رقم الطلب:</strong> ${
                     data.uquidOrder?.batch_id || "غير متوفر"
@@ -269,25 +284,44 @@ function App() {
           resetPaymentFlow();
         } else {
           // Payment failed or rejected
-          setError(`فشل في الدفع: ${data.message}`);
+          const errorMessage = data.message || "حدث خطأ في عملية الدفع";
+          setError(`فشل في الدفع: ${errorMessage}`);
           setPaymentStep("invoice");
+
+          // Check if it's a payment rejection (not a network error)
+          const isPaymentRejected =
+            response.status === 400 &&
+            (errorMessage.includes("rejected") ||
+              errorMessage.includes("failed") ||
+              errorMessage.includes("cancelled") ||
+              errorMessage.includes("فاشله") ||
+              errorMessage.includes("عمليه فاشله"));
+
           Swal.fire({
-            icon: "error",
-            title: "فشل في العملية",
-            text: data.message || "حدث خطأ في عملية الدفع",
+            icon: isPaymentRejected ? "warning" : "error",
+            title: isPaymentRejected ? "تم رفض الدفع" : "فشل في العملية",
+            text: errorMessage,
             confirmButtonText: "حسناً",
           });
+
+          // Reset form on payment rejection
+          if (isPaymentRejected) {
+            setShowInvoice(false);
+            setPhoneNumber("");
+            setVodafoneCashNumber("");
+            setAmount("");
+            resetPaymentFlow();
+          }
         }
       } catch (error) {
         clearInterval(checkInterval);
-        setError(error.message || "حدث خطأ في التحقق من حالة الدفع");
+        const errorMessage = error.message || "حدث خطأ في التحقق من حالة الدفع";
+        setError(errorMessage);
         setPaymentStep("invoice");
         Swal.fire({
           icon: "error",
           title: "خطأ في الاتصال",
-          text:
-            error.message ||
-            "حدث خطأ في التحقق من حالة الدفع. يرجى المحاولة مرة أخرى.",
+          text: errorMessage + ". يرجى المحاولة مرة أخرى.",
           confirmButtonText: "حسناً",
         });
       }
@@ -311,6 +345,11 @@ function App() {
 
   // Reset payment flow
   const resetPaymentFlow = () => {
+    setPhoneNumber("");
+    setVodafoneCashNumber("");
+    setAmount("");
+    setLandlineNumber("");
+    setInternetPackage("");
     setPaymentStep("invoice");
     setPaymentData(null);
     setPaymentId("");
@@ -478,7 +517,8 @@ function App() {
                     شحن رصيد فودافون
                   </h3>
                   <p className="text-red-500 text-sm">
-                    اكتب رقم موبايلك واختر المبلغ المطلوب شحنه
+                    اكتب رقم الهاتف المراد شحنه ورقم فودافون كاش للدفع واختر
+                    المبلغ
                   </p>
                 </div>
 
@@ -490,7 +530,7 @@ function App() {
                         htmlFor="phone"
                         className="text-right block mb-3 text-gray-700 font-medium text-lg"
                       >
-                        رقم الهاتف
+                        رقم الهاتف (المراد شحنه)
                       </label>
                       <Input
                         id="phone"
@@ -498,6 +538,22 @@ function App() {
                         placeholder="01xxxxxxxxx"
                         value={phoneNumber}
                         onChange={(e) => setPhoneNumber(e.target.value)}
+                        className="w-full text-right border-gray-300 rounded-lg p-4 text-black text-lg"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="vodafoneCash"
+                        className="text-right block mb-3 text-gray-700 font-medium text-lg"
+                      >
+                        رقم فودافون كاش (للدفع)
+                      </label>
+                      <Input
+                        id="vodafoneCash"
+                        type="tel"
+                        placeholder="01xxxxxxxxx"
+                        value={vodafoneCashNumber}
+                        onChange={(e) => setVodafoneCashNumber(e.target.value)}
                         className="w-full text-right border-gray-300 rounded-lg p-4 text-black text-lg"
                       />
                     </div>
@@ -549,7 +605,7 @@ function App() {
                   <Button
                     onClick={handleBalanceRecharge}
                     className="w-full mt-8 bg-red-600 hover:bg-red-700 text-white font-bold py-5 text-xl rounded-lg flex items-center justify-center gap-2"
-                    disabled={!phoneNumber || !amount}
+                    disabled={!phoneNumber || !vodafoneCashNumber || !amount}
                   >
                     <svg
                       className="w-6 h-6"

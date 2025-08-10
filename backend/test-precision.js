@@ -46,7 +46,7 @@ console.log("\nTesting 9.999999999999998 EGP:");
 console.log(calculateApiCallSplit(9.999999999999998));
 
 console.log("\nTesting division result:");
-const problemAmount = 11.2 / 1.12;
+const problemAmount = 11.2 / 1.2;
 console.log("Raw result:", problemAmount);
 console.log("Rounded result:", roundToTwo(problemAmount));
 console.log("Split result:", calculateApiCallSplit(problemAmount));
@@ -55,7 +55,7 @@ console.log("Split result:", calculateApiCallSplit(problemAmount));
 console.log("\nTesting service fee calculation:");
 const amount = 10;
 const topUpAmount = roundToTwo(parseFloat(amount));
-const serviceFee = roundToTwo(topUpAmount * 0.12);
+const serviceFee = roundToTwo(topUpAmount * 0.2);
 const totalAmount = roundToTwo(topUpAmount + serviceFee);
 
 console.log("Original amount:", amount);
@@ -64,7 +64,7 @@ console.log("Service fee:", serviceFee);
 console.log("Total amount:", totalAmount);
 
 const paidAmount = totalAmount;
-const calculatedTopUp = roundToTwo(paidAmount / 1.12);
+const calculatedTopUp = roundToTwo(paidAmount / 1.2);
 console.log("Calculated top-up from paid amount:", calculatedTopUp);
 console.log(
   "Split result for calculated:",

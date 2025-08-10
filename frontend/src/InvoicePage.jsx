@@ -73,11 +73,23 @@ const InvoicePage = ({
             <div className="space-y-4 text-lg">
               <div className="flex justify-between">
                 <span>
-                  رقم {invoiceData.type === "mobile" ? "الهاتف" : "الخط الأرضي"}
+                  رقم{" "}
+                  {invoiceData.type === "mobile"
+                    ? "الهاتف (المراد شحنه)"
+                    : "الخط الأرضي"}
                   :
                 </span>
                 <span className="font-semibold">{invoiceData.number}</span>
               </div>
+              {invoiceData.type === "mobile" &&
+                invoiceData.vodafoneCashNumber && (
+                  <div className="flex justify-between">
+                    <span>رقم فودافون كاش (للدفع):</span>
+                    <span className="font-semibold">
+                      {invoiceData.vodafoneCashNumber}
+                    </span>
+                  </div>
+                )}
               <div className="flex justify-between">
                 <span>مبلغ الشحن:</span>
                 <span className="font-semibold">{invoiceData.amount} جنيه</span>
@@ -91,7 +103,7 @@ const InvoicePage = ({
                 </div>
               )}
               <div className="flex justify-between">
-                <span>رسوم الخدمة (12%):</span>
+                <span>رسوم الخدمة (20%):</span>
                 <span className="font-semibold">
                   {invoiceData.serviceFee} جنيه
                 </span>
