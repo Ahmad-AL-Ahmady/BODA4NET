@@ -407,9 +407,14 @@ function App() {
           {/* قسم البطل */}
           <section className="py-20 text-center">
             <div className="container mx-auto px-4">
-              <h1 className="text-5xl md:text-6xl font-bold mb-6">
-                اشحن رصيدك اسرع , ارخص , آمن
-              </h1>
+              <div className="text-center mb-6">
+                <div className="text-5xl md:text-6xl font-bold text-white mb-3 tracking-wide">
+                  Wahba
+                </div>
+                <div className="text-4xl md:text-5xl font-bold text-white/95 leading-tight">
+                  اشحن رصيدك اسرع , ارخص , آمن
+                </div>
+              </div>
               <p className="text-xl md:text-2xl mb-12 opacity-90">
                 كل خدمات فودافون في مكان واحد وباقل تكلفة
               </p>
