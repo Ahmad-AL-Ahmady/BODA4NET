@@ -2,13 +2,13 @@
 
 ## Project Overview
 
-BODA4NET is a full-stack web application for Vodafone Egypt mobile top-ups and home internet recharges. The system integrates with Sha7nawy payment gateway for payments and Uquid API for mobile top-ups.
+BODA4NET is a full-stack web application for Vodafone Egypt mobile top-ups and home internet recharges. The system integrates with Uquid API for mobile top-ups.
 
 ## Architecture
 
 - **Frontend**: React.js with Vite, TailwindCSS, and Shadcn/ui components
 - **Backend**: Node.js/Express.js server with RESTful API
-- **Payment Integration**: Sha7nawy payment gateway (*9*1# USSD)
+- **Payment Integration**: Payment gateway integration ready (sha7nawy removed)
 - **Top-up Service**: Uquid API for Vodafone Egypt mobile recharges
 - **UI Framework**: Shadcn/ui component library with TailwindCSS styling
 
@@ -83,7 +83,7 @@ backend/
 
 1. User selects phone number and amount
 2. System generates invoice with 20% service fee
-3. Creates Sha7nawy payment request
+3. Payment service integration (payment provider removed)
 4. User pays via *9*1# USSD code
 5. System automatically checks payment status every 10 seconds
 6. Upon successful payment, triggers Uquid top-up
@@ -113,7 +113,7 @@ backend/
 
 ### Payment Management
 
-- `POST /api/payment/create` - Create Sha7nawy payment request
+- `POST /api/payment/create` - Create payment request (temporarily unavailable)
 - `POST /api/payment/check-and-process` - Check payment & process top-up
 - `GET /api/payment/info/:transactionId` - Get payment information
 
@@ -137,8 +137,8 @@ backend/
 PORT=3001
 UQ_PUBLIC_KEY=your_uquid_public_key
 UQ_SECRET_KEY=your_uquid_secret_key
-SHA7NAWY_PUBLIC_KEY=your_sha7nawy_public_key
-SHA7NAWY_SECRET_KEY=your_sha7nawy_secret_key
+# SHA7NAWY_PUBLIC_KEY=your_sha7nawy_public_key (removed)
+# SHA7NAWY_SECRET_KEY=your_sha7nawy_secret_key (removed)
 ```
 
 ## Build & Development Scripts
@@ -175,7 +175,7 @@ SHA7NAWY_SECRET_KEY=your_sha7nawy_secret_key
 1. Node.js 18+ installed
 2. npm or pnpm package manager
 3. Uquid API credentials
-4. Sha7nawy payment gateway credentials
+4. Payment gateway credentials (if using alternative to sha7nawy)
 
 ### Local Development Deployment
 
@@ -224,7 +224,7 @@ cp .env.example .env.local
 - `CORS_ORIGIN` - Allowed frontend origins
 - `FRONTEND_URL` - Main frontend URL
 - `UQ_PUBLIC_KEY` & `UQ_SECRET_KEY` - Uquid API credentials
-- `SHA7NAWY_PUBLIC_KEY` & `SHA7NAWY_SECRET_KEY` - Sha7nawy API credentials
+- Payment gateway credentials (sha7nawy removed, add your new payment provider credentials)
 
 3. **Start Development Servers**
 
@@ -364,8 +364,9 @@ heroku create boda4net-backend
 # Set environment variables
 heroku config:set UQ_PUBLIC_KEY=your_key -a boda4net-backend
 heroku config:set UQ_SECRET_KEY=your_secret -a boda4net-backend
-heroku config:set SHA7NAWY_PUBLIC_KEY=your_key -a boda4net-backend
-heroku config:set SHA7NAWY_SECRET_KEY=your_secret -a boda4net-backend
+# heroku config:set SHA7NAWY_PUBLIC_KEY=your_key -a boda4net-backend (removed)
+# heroku config:set SHA7NAWY_SECRET_KEY=your_secret -a boda4net-backend (removed)
+# Add your new payment provider credentials here
 
 # Deploy
 git push heroku main
@@ -415,7 +416,7 @@ Currently, the application doesn't use a persistent database. For production use
 2. **API Monitoring**
 
    - Monitor Uquid API usage and limits
-   - Track Sha7nawy payment success rates
+   - Track payment success rates (for new payment provider)
    - Set up alerting for failed transactions
 
 3. **Performance Optimization**
@@ -429,7 +430,7 @@ Currently, the application doesn't use a persistent database. For production use
 1. **CORS Errors**: Ensure backend CORS is configured for your frontend domain
 2. **API Failures**: Check environment variables and API credentials
 3. **Build Failures**: Verify Node.js version compatibility
-4. **Payment Issues**: Verify Sha7nawy credentials and network connectivity
+4. **Payment Issues**: Verify payment gateway credentials and network connectivity
 5. **Top-up Failures**: Check Uquid API status and account balance
 
 ### Support & Maintenance

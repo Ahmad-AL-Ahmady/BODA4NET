@@ -3,7 +3,6 @@ import logger from "./middleware/logger.js";
 import {
   SERVER_CONFIG,
   UQUID_CONFIG,
-  SHA7NAWY_CONFIG,
   validateEnvironment,
 } from "./config/index.js";
 
@@ -85,16 +84,6 @@ const server = app.listen(SERVER_CONFIG.PORT, "0.0.0.0", () => {
   console.log(
     `🔑 [UQUID] API Key: ${UQUID_CONFIG.API_KEY ? "✅ Loaded" : "❌ Missing"}`
   );
-  console.log(
-    `🔑 [SHA7NAWY] Public Key: ${
-      SHA7NAWY_CONFIG.PUBLIC_KEY ? "✅ Loaded" : "❌ Missing"
-    }`
-  );
-  console.log(
-    `🔑 [SHA7NAWY] Secret Key: ${
-      SHA7NAWY_CONFIG.SECRET_KEY ? "✅ Loaded" : "❌ Missing"
-    }`
-  );
 
   if (SERVER_CONFIG.NODE_ENV === "production") {
     console.log(`⚡ [SERVER] Production optimizations enabled`);
@@ -117,11 +106,6 @@ const server = app.listen(SERVER_CONFIG.PORT, "0.0.0.0", () => {
   );
   logger.info(
     `[UQUID] API Key: ${UQUID_CONFIG.API_KEY ? "Loaded" : "Missing"}`
-  );
-  logger.info(
-    `[SHA7NAWY] Public Key: ${
-      SHA7NAWY_CONFIG.PUBLIC_KEY ? "Loaded" : "Missing"
-    }`
   );
 
   if (SERVER_CONFIG.NODE_ENV === "production") {

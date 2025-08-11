@@ -113,7 +113,7 @@ function App() {
     setShowInvoice(true);
   };
 
-  // Create payment with Sha7nawy
+  // Create payment request
   const handleConfirmPurchase = async () => {
     if (!invoiceData) return;
 
@@ -176,10 +176,25 @@ function App() {
             <p style="color: #28a745; font-weight: bold;">✓ تم التحقق من المنتج</p>
             <p style="color: #28a745; font-weight: bold;">✓ تم التحقق من الرصيد</p>
             <p style="color: #28a745; font-weight: bold;">✓ تم إنشاء طلب الدفع</p>
+            ${
+              data.testMode
+                ? '<p style="color: #ff6b35; font-weight: bold; background: #fff3cd; padding: 5px 10px; border-radius: 5px; margin: 10px 0;">⚠️ وضع التجربة - لا حاجة للدفع</p>'
+                : ""
+            }
             <hr style="margin: 15px 0;">
-            <p><strong>اتصل بـ *9*1# واتبع التعليمات</strong></p>
-            <p>رمز الدفع: <span style="font-size: 1.2em; color: #007bff; font-weight: bold;">${data.reference}</span></p>
-            <p style="color: #6c757d;">سيتم التحقق من الدفع تلقائياً...</p>
+            ${
+              data.testMode
+                ? "<p><strong>وضع التجربة: سيتم تنفيذ الطلب تلقائياً</strong></p>"
+                : "<p><strong>اتصل بـ *9*1# واتبع التعليمات</strong></p>"
+            }
+            <p>رمز المرجع: <span style="font-size: 1.2em; color: #007bff; font-weight: bold;">${
+              data.reference
+            }</span></p>
+            <p style="color: #6c757d;">${
+              data.testMode
+                ? "سيتم تنفيذ الطلب خلال ثوانٍ..."
+                : "سيتم التحقق من الدفع تلقائياً..."
+            }</p>
           </div>
         `,
         confirmButtonText: "حسناً",
@@ -234,10 +249,17 @@ function App() {
           setPaymentStep("completed");
           Swal.fire({
             icon: "success",
-            title: "🎉 تم شحن الرصيد بنجاح!",
+            title: `🎉 تم شحن الرصيد بنجاح!${
+              data.testMode ? " (وضع التجربة)" : ""
+            }`,
             html: `
               <div style="text-align: center; line-height: 1.8;">
-                <p style="color: #28a745; font-weight: bold; margin: 10px 0;">✓ تم تأكيد الدفع من Sha7nawy</p>
+                ${
+                  data.testMode
+                    ? '<p style="color: #ff6b35; font-weight: bold; background: #fff3cd; padding: 5px 10px; border-radius: 5px; margin: 10px 0;">⚠️ وضع التجربة - تم اختبار النظام بنجاح</p>'
+                    : ""
+                }
+                <p style="color: #28a745; font-weight: bold; margin: 10px 0;">✓ تم تأكيد الدفع</p>
                 <p style="color: #28a745; font-weight: bold; margin: 10px 0;">✓ تم طلب الشحن من Uquid</p>
                 <p style="color: #28a745; font-weight: bold; margin: 10px 0;">✓ تم تأكيد الطلب</p>
                 <hr style="margin: 15px 0;">

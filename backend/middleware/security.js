@@ -12,11 +12,7 @@ export const securityHeaders = helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:"],
       scriptSrc: ["'self'"],
-      connectSrc: [
-        "'self'",
-        "https://shop.uquid.com",
-        "https://gate.sha7nawy.com",
-      ],
+      connectSrc: ["'self'", "https://shop.uquid.com"],
     },
   },
   crossOriginEmbedderPolicy: false,
@@ -73,12 +69,7 @@ export const handleValidationErrors = (req, res, next) => {
 
 // API key validation middleware
 export const validateApiKeys = (req, res, next) => {
-  const requiredKeys = [
-    "UQ_PUBLIC_KEY",
-    "UQ_SECRET_KEY",
-    "SHA7NAWY_PUBLIC_KEY",
-    "SHA7NAWY_SECRET_KEY",
-  ];
+  const requiredKeys = ["UQ_PUBLIC_KEY", "UQ_SECRET_KEY"];
 
   const missingKeys = requiredKeys.filter((key) => !process.env[key]);
 

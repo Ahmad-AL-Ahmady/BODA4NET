@@ -1,7 +1,7 @@
 {
   "name": "vodafone-topup-backend",
   "version": "1.0.0",
-  "description": "Vodafone Top-up System Backend with Sha7nawy Payment Integration",
+  "description": "Vodafone Top-up System Backend with Uquid API Integration",
   "type": "module",
   "main": "server.js",
   "scripts": {
@@ -27,7 +27,6 @@
     "vodafone",
     "topup",
     "payment",
-    "sha7nawy",
     "uquid"
   ],
   "author": "",

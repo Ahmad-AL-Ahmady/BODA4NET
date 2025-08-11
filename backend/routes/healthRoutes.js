@@ -2,7 +2,6 @@ import express from "express";
 import { SERVER_CONFIG, HEALTH_CONFIG } from "../config/index.js";
 import logger from "../middleware/logger.js";
 import uquidService from "../services/uquidService.js";
-import sha7nawyService from "../services/sha7nawyService.js";
 
 const router = express.Router();
 
@@ -17,7 +16,6 @@ router.get("/", async (req, res) => {
     version: HEALTH_CONFIG.VERSION,
     services: {
       uquid: false,
-      sha7nawy: false,
     },
   };
 
@@ -29,12 +27,7 @@ router.get("/", async (req, res) => {
     logger.warn("Uquid health check failed:", error.message);
   }
 
-  try {
-    // Test Sha7nawy API
-    healthData.services.sha7nawy = await sha7nawyService.isHealthy();
-  } catch (error) {
-    logger.warn("Sha7nawy health check failed:", error.message);
-  }
+  // Sha7nawy service removed
 
   const allServicesHealthy = Object.values(healthData.services).every(Boolean);
   if (!allServicesHealthy) {

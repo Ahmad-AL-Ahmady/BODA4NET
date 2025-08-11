@@ -1,14 +1,15 @@
-# New Payment Flow Documentation
+# Payment Flow Documentation - Updated
 
 ## Overview
 
-The payment flow has been updated to follow a more robust sequence that ensures all prerequisites are met before processing payments.
+⚠️ **Important Notice**: The Sha7nawy payment service has been removed from this system.
+The payment flow documentation below is preserved for reference, but the payment endpoints are currently disabled.
 
-## New Payment Flow Sequence
+## Previous Payment Flow Sequence (Sha7nawy - Removed)
 
 ### 1. Check for Item Using Price (Uquid Product Validation)
 
-- **Endpoint**: `POST /api/payment/create`
+- **Endpoint**: `POST /api/payment/create` (Currently returns 501 - Service Unavailable)
 - **Action**: Queries Uquid API for Vodafone Egypt products
 - **Validation**: Ensures the requested amount has a corresponding product available
 - **Error Handling**: Returns error if no suitable product is found
@@ -19,21 +20,20 @@ The payment flow has been updated to follow a more robust sequence that ensures 
 - **Validation**: Ensures sufficient USDT balance for the transaction
 - **Error Handling**: Returns error if insufficient balance
 
-### 3. Start Sha7nawy Process
+### 3. Payment Integration (Removed)
 
-- **Action**: Creates payment request with Sha7nawy
-- **Parameters**: Phone number, total amount (including 20% service fee)
-- **Response**: Returns payment reference and ID for tracking
+- **Previous Action**: Created payment request with Sha7nawy
+- **Current Status**: Payment service removed, integration needed for new provider
+- **Required**: Implement new payment gateway integration
 
-### 4. After Sha7nawy Confirmation, Order from Uquid
+### 4. Payment Processing (Disabled)
 
-- **Endpoint**: `POST /api/payment/check-and-process`
-- **Process**:
-  1. Confirm payment with Sha7nawy
-  2. Check payment status
-  3. If successful, submit order to Uquid
-  4. Confirm Uquid order
-  5. Complete transaction
+- **Endpoint**: `POST /api/payment/check-and-process` (Currently returns 501 - Service Unavailable)
+- **Previous Process**:
+  1. Confirm payment status
+  2. If successful, submit order to Uquid
+  3. Confirm Uquid order
+  4. Complete transaction
 
 ## API Endpoints
 
@@ -95,7 +95,7 @@ GET /api/uquid/products/check/{amount}
 
 1. **Insufficient Balance**: Uquid account doesn't have enough USDT
 2. **Product Not Found**: No Vodafone Egypt product available for the requested amount
-3. **Payment Failed**: Sha7nawy payment was rejected or failed
+3. **Payment Failed**: Payment was rejected or failed (payment service removed)
 4. **Order Failed**: Uquid order submission or confirmation failed
 
 ### Error Response Format
@@ -157,12 +157,12 @@ The system logs detailed information for each step:
 - `[PAYMENT FLOW] Starting new payment flow`
 - `[UQUID] Step 1: Checking for product`
 - `[UQUID] Step 2: Checking account balance`
-- `[SHA7NAWY] Step 3: Creating payment request`
-- `[UQUID] Step 4: Processing top-up after Sha7nawy confirmation`
+- `[PAYMENT] Step 3: Payment service integration required`
+- `[UQUID] Step 4: Processing top-up after payment confirmation`
 
 ### Health Check
 
-The health check endpoint (`/api/health`) monitors both Uquid and Sha7nawy service availability.
+The health check endpoint (`/api/health`) monitors Uquid service availability. Payment service monitoring removed with sha7nawy.
 
 ## Configuration
 
@@ -170,8 +170,7 @@ The health check endpoint (`/api/health`) monitors both Uquid and Sha7nawy servi
 
 - `UQ_PUBLIC_KEY`: Uquid API public key
 - `UQ_SECRET_KEY`: Uquid API secret key
-- `SHA7NAWY_PUBLIC_KEY`: Sha7nawy API public key
-- `SHA7NAWY_SECRET_KEY`: Sha7nawy API secret key
+- Payment gateway credentials: Add credentials for your new payment provider (sha7nawy removed)
 
 ## Future Enhancements
 

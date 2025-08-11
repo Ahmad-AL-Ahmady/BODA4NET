@@ -30,14 +30,6 @@ export const UQUID_CONFIG = {
   MAX_API_AMOUNT: 200, // Maximum amount per API call
 };
 
-// Sha7nawy Payment API configuration
-export const SHA7NAWY_CONFIG = {
-  PUBLIC_KEY: process.env.SHA7NAWY_PUBLIC_KEY?.trim(),
-  SECRET_KEY: process.env.SHA7NAWY_SECRET_KEY?.trim(),
-  BASE_URL: "https://gate.sha7nawy.com/api",
-  TIMEOUT: 30000,
-};
-
 // Business logic configuration
 export const BUSINESS_CONFIG = {
   MIN_AMOUNT: 5,
@@ -82,12 +74,7 @@ export const CORS_CONFIG = {
 };
 
 // Required environment variables
-export const REQUIRED_ENV_VARS = [
-  "UQ_PUBLIC_KEY",
-  "UQ_SECRET_KEY",
-  "SHA7NAWY_PUBLIC_KEY",
-  "SHA7NAWY_SECRET_KEY",
-];
+export const REQUIRED_ENV_VARS = ["UQ_PUBLIC_KEY", "UQ_SECRET_KEY"];
 
 // Validate required environment variables
 export function validateEnvironment() {
@@ -101,23 +88,10 @@ export function validateEnvironment() {
     missing.push("Uquid credentials");
   }
 
-  if (!SHA7NAWY_CONFIG.PUBLIC_KEY || !SHA7NAWY_CONFIG.SECRET_KEY) {
-    console.error(
-      "❌ Missing Sha7nawy API credentials. Please set SHA7NAWY_PUBLIC_KEY and SHA7NAWY_SECRET_KEY in your .env file"
-    );
-    console.error("📝 Copy env.example to .env and fill in your API keys");
-    missing.push("Sha7nawy credentials");
-  }
-
   return missing;
 }
 
 // Check if all required configurations are available
 export function isConfigurationValid() {
-  return (
-    UQUID_CONFIG.API_KEY &&
-    UQUID_CONFIG.API_SECRET &&
-    SHA7NAWY_CONFIG.PUBLIC_KEY &&
-    SHA7NAWY_CONFIG.SECRET_KEY
-  );
+  return UQUID_CONFIG.API_KEY && UQUID_CONFIG.API_SECRET;
 }

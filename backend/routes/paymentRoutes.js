@@ -6,7 +6,7 @@ import {
   handleValidationErrors,
 } from "../middleware/security.js";
 import logger, { logTransaction } from "../middleware/logger.js";
-import sha7nawyService from "../services/sha7nawyService.js";
+
 import uquidService from "../services/uquidService.js";
 import {
   calculateApiCallSplit,
@@ -24,7 +24,11 @@ import {
 
 const router = express.Router();
 
-// 1. Create Sha7nawy payment request
+// Temporary in-memory storage for test mode payment data
+// In production, this would be stored in a database
+const testPaymentStore = new Map();
+
+// Payment endpoint - TEST MODE (no payment gateway required)
 router.post(
   "/create",
   validatePhoneNumber,
@@ -37,7 +41,7 @@ router.post(
     try {
       const { phoneNumber, vodafoneCashNumber, amount } = req.body;
 
-      logger.info(`[PAYMENT-${flowId}] 🚀 Payment flow started:`, {
+      logger.info(`[PAYMENT-${flowId}] 🚀 TEST MODE - Payment flow started:`, {
         flowId,
         phoneNumber: maskPhoneNumber(phoneNumber),
         vodafoneCashNumber: maskPhoneNumber(vodafoneCashNumber),
@@ -161,46 +165,49 @@ router.post(
         );
       }
 
-      // Create payment with Sha7nawy
-      const paymentData = {
-        number: vodafoneCashNumber, // Use Vodafone Cash number for payment
-        amount: totalAmount,
-        method: "vfcash",
-        client: `User: ${vodafoneCashNumber} (Recharge: ${phoneNumber})`,
-        details: `Vodafone Egypt Top-up ${topUpAmount} EGP (+ ${serviceFee} EGP 20% service fee) - Recharge phone: ${phoneNumber}`,
-      };
+      // Generate fake payment reference for testing
+      const testPaymentId = `TEST_${Date.now()}_${Math.random()
+        .toString(36)
+        .substring(7)}`;
+      const testReference = `REF_${Date.now()}`;
 
-      logger.info(`[PAYMENT-${flowId}] 💳 Sha7nawy request body:`, {
-        number: maskPhoneNumber(paymentData.number),
-        amount: paymentData.amount,
-        method: paymentData.method,
-        client: paymentData.client,
-        details: paymentData.details,
+      // Store payment data for test mode processing
+      testPaymentStore.set(testPaymentId, {
+        phoneNumber,
+        vodafoneCashNumber,
+        amount: topUpAmount,
+        totalAmount,
+        serviceFee,
+        reference: testReference,
+        created: new Date().toISOString(),
       });
 
-      const response = await sha7nawyService.createPayment(paymentData);
+      logger.info(
+        `[PAYMENT-${flowId}] 💳 TEST MODE - Simulated payment created:`,
+        {
+          paymentId: testPaymentId,
+          reference: testReference,
+          amount: totalAmount,
+        }
+      );
 
-      if (response.status && response.data) {
-        res.json({
-          success: true,
-          message: `${response.message} - You will pay ${totalAmount} EGP (${topUpAmount} EGP top-up + ${serviceFee} EGP 20% service fee)`,
-          reference: response.data.reference,
-          paymentId: response.data.id, // Payment ID for status checking
-          topUpAmount: topUpAmount,
-          serviceFee: serviceFee,
-          totalAmount: totalAmount,
-          uquidProducts: selectedProducts, // Store all product info for later use
-          apiCallSplits: apiCallSplits, // Store split information
-          totalRequiredBalance: totalRequiredBalance, // Store total balance required
-          uquidBalance: availableBalance, // Store balance info for later use
-        });
-      } else {
-        throw new Error(response.message || "Failed to create payment");
-      }
+      res.json({
+        success: true,
+        message: `TEST MODE: Payment simulation created - You would pay ${totalAmount} EGP (${topUpAmount} EGP top-up + ${serviceFee} EGP 20% service fee)`,
+        reference: testReference,
+        paymentId: testPaymentId,
+        topUpAmount: topUpAmount,
+        serviceFee: serviceFee,
+        totalAmount: totalAmount,
+        uquidProducts: selectedProducts,
+        apiCallSplits: apiCallSplits,
+        totalRequiredBalance: totalRequiredBalance,
+        uquidBalance: availableBalance,
+        testMode: true,
+      });
     } catch (error) {
       const totalFlowDuration = Date.now() - flowStartTime;
 
-      // Log detailed error context for debugging
       logger.error(`[PAYMENT-${flowId}] Payment flow error:`, {
         error: error.message,
         flowId,
@@ -219,7 +226,7 @@ router.post(
   }
 );
 
-// 2. Confirm payment with Sha7nawy then check status and execute Uquid top-up
+// Payment processing endpoint - TEST MODE (simulates successful payment)
 router.post(
   "/check-and-process",
   validatePaymentData,
@@ -235,62 +242,45 @@ router.post(
     }
 
     try {
-      logger.info(`[TRANSACTION] 🔄 Starting payment check and process:`, {
-        paymentId,
-        reference,
-        timestamp: new Date().toISOString(),
-      });
-
-      // Check payment status with Sha7nawy
-      const paymentResult = await sha7nawyService.checkPaymentStatus(
-        paymentId,
-        reference
+      logger.info(
+        `[TRANSACTION] 🔄 TEST MODE - Starting payment check and process:`,
+        {
+          paymentId,
+          reference,
+          timestamp: new Date().toISOString(),
+        }
       );
 
-      // Handle different payment statuses
-      if (paymentResult.status === "failed") {
-        return res.status(400).json({
+      // In test mode, we simulate successful payment after a short delay
+      await delay(2000); // 2 second delay to simulate payment processing
+
+      // Retrieve stored payment data
+      const storedPaymentData = testPaymentStore.get(paymentId);
+      if (!storedPaymentData) {
+        return res.status(404).json({
           success: false,
-          message: paymentResult.message,
-          paymentStatus: paymentResult.data.status,
-        });
-      } else if (paymentResult.status === "pending") {
-        return res.status(202).json({
-          success: false,
-          message: paymentResult.message,
-          paymentStatus: paymentResult.data.status,
-          shouldRetry: true,
-        });
-      } else if (paymentResult.status === "unknown") {
-        return res.status(400).json({
-          success: false,
-          message: paymentResult.message,
-          paymentStatus: paymentResult.data.status,
+          message: "Payment not found - may have expired or invalid payment ID",
+          testMode: true,
         });
       }
 
-      // Payment completed successfully - process Uquid orders
-      const { amount: totalPaidAmount, number: vodafoneCashNumber } =
-        paymentResult.data;
+      const {
+        phoneNumber: testPhoneNumber,
+        vodafoneCashNumber: testVodafoneCashNumber,
+        totalAmount: testTotalAmount,
+      } = storedPaymentData;
 
-      // Extract the original phone number to recharge from the payment details
-      const detailsText = paymentResult.data.details || "";
-      const phoneNumber = extractPhoneFromDetails(
-        detailsText,
-        vodafoneCashNumber
-      );
-
-      logger.info(`[TRANSACTION] 📱 Extracted phone numbers:`, {
-        vodafoneCashNumber: maskPhoneNumber(vodafoneCashNumber),
-        phoneNumber: maskPhoneNumber(phoneNumber),
-        totalPaidAmount,
+      logger.info(`[TRANSACTION] 📱 TEST MODE - Using test phone numbers:`, {
+        vodafoneCashNumber: maskPhoneNumber(testVodafoneCashNumber),
+        phoneNumber: maskPhoneNumber(testPhoneNumber),
+        totalPaidAmount: testTotalAmount,
       });
 
       // Calculate the original top-up amount (excluding service fee)
-      const { topUpAmount, serviceFee } = extractTopUpAmount(totalPaidAmount);
+      const { topUpAmount, serviceFee } = extractTopUpAmount(testTotalAmount);
 
       logger.info(`[TRANSACTION] 💰 Calculated amounts:`, {
-        totalPaidAmount,
+        totalPaidAmount: testTotalAmount,
         topUpAmount,
         serviceFee,
       });
@@ -314,7 +304,7 @@ router.post(
       );
 
       // Format phone number for Uquid
-      const formattedPhone = formatPhoneForUquid(phoneNumber);
+      const formattedPhone = formatPhoneForUquid(testPhoneNumber);
 
       // Submit multiple orders based on splits
       const orderResults = await uquidService.processMultipleOrders(
@@ -329,40 +319,50 @@ router.post(
       );
 
       const finalTransaction = {
-        topUpAmount: Math.round(topUpAmount * 100) / 100, // Round to 2 decimal places
+        topUpAmount: Math.round(topUpAmount * 100) / 100,
         serviceFee: Math.round(serviceFee * 100) / 100,
-        totalPaid: parseFloat(totalPaidAmount),
-        phoneNumber: phoneNumber, // Phone number that was recharged
-        vodafoneCashNumber: vodafoneCashNumber, // Vodafone Cash number used for payment
+        totalPaid: parseFloat(testTotalAmount),
+        phoneNumber: testPhoneNumber,
+        vodafoneCashNumber: testVodafoneCashNumber,
         totalOrders: orderResults.length,
         totalConfirmed: confirmationResults.filter((c) => c.confirmed).length,
       };
 
-      logger.info(`[TRANSACTION] 🎉 Transaction completed successfully:`, {
-        ...finalTransaction,
-        phoneNumber: maskPhoneNumber(finalTransaction.phoneNumber),
-        vodafoneCashNumber: maskPhoneNumber(
-          finalTransaction.vodafoneCashNumber
-        ),
-      });
+      logger.info(
+        `[TRANSACTION] 🎉 TEST MODE - Transaction completed successfully:`,
+        {
+          ...finalTransaction,
+          phoneNumber: maskPhoneNumber(finalTransaction.phoneNumber),
+          vodafoneCashNumber: maskPhoneNumber(
+            finalTransaction.vodafoneCashNumber
+          ),
+        }
+      );
 
       res.json({
         success: true,
-        message: "Top-up successful!",
-        sha7nawyTransaction: paymentResult.data,
-        uquidOrders: orderResults, // Array of all order results
-        confirmationResults: confirmationResults, // Array of all confirmation results
+        message: "TEST MODE: Top-up successful!",
+        testPaymentTransaction: {
+          id: paymentId,
+          reference: reference,
+          status: "completed",
+          amount: testTotalAmount,
+          number: testVodafoneCashNumber,
+          details: `TEST MODE: Vodafone Egypt Top-up ${topUpAmount} EGP (+ ${serviceFee} EGP 20% service fee) - Recharge phone: ${testPhoneNumber}`,
+        },
+        uquidOrders: orderResults,
+        confirmationResults: confirmationResults,
         uquidOrder: orderResults[0]
           ? {
-              // For frontend compatibility, provide first order
               batch_id: orderResults[0].batchId,
               status: "processing",
             }
           : null,
         transaction: finalTransaction,
+        testMode: true,
       });
     } catch (error) {
-      logger.error("[TRANSACTION] Failed:", {
+      logger.error("[TRANSACTION] TEST MODE Failed:", {
         error: error.message,
         paymentId,
         reference,
@@ -371,7 +371,7 @@ router.post(
       });
 
       logTransaction(
-        "uquid_topup",
+        "uquid_topup_test",
         { paymentId, reference, error: error.message },
         false
       );
@@ -383,33 +383,42 @@ router.post(
           paymentId,
           reference,
           timestamp: new Date().toISOString(),
+          testMode: true,
         },
       });
     }
   }
 );
 
-// 3. Get payment information
+// Payment info endpoint - TEST MODE
 router.get("/info/:transactionId", async (req, res) => {
   try {
     const { transactionId } = req.params;
 
-    const response = await sha7nawyService.getPaymentInfo(transactionId);
+    // In test mode, return simulated payment info
+    const testPaymentInfo = {
+      id: transactionId,
+      reference: `REF_${transactionId}`,
+      status: "completed",
+      amount: 24,
+      number: "01087654321",
+      details: "TEST MODE: Simulated payment information",
+      created_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+    };
 
-    if (response.status && response.data) {
-      res.json({
-        success: true,
-        payment: response.data,
-        message: response.message,
-      });
-    } else {
-      throw new Error(response.message || "Failed to get payment info");
-    }
+    res.json({
+      success: true,
+      payment: testPaymentInfo,
+      message: "TEST MODE: Payment info retrieved",
+      testMode: true,
+    });
   } catch (error) {
-    logger.error("[SHA7NAWY] Error getting payment info:", error.message);
+    logger.error("[PAYMENT-INFO] TEST MODE Error:", error.message);
     res.status(500).json({
       success: false,
       message: error.message || "Failed to get payment info",
+      testMode: true,
     });
   }
 });
