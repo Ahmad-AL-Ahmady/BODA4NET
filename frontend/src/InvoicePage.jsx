@@ -148,18 +148,6 @@ const InvoicePage = ({
                   </span>
                 </div>
 
-                {invoiceData.type === "mobile" &&
-                  invoiceData.vodafoneCashNumber && (
-                    <div className="flex justify-between items-center py-3 border-b border-gray-200/50">
-                      <span className="text-gray-700 font-medium">
-                        رقم فودافون كاش (للدفع):
-                      </span>
-                      <span className="font-bold text-gray-900 bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                        {invoiceData.vodafoneCashNumber}
-                      </span>
-                    </div>
-                  )}
-
                 <div className="flex justify-between items-center py-3 border-b border-gray-200/50">
                   <span className="text-gray-700 font-medium">مبلغ الشحن:</span>
                   <span className="font-bold text-gray-900 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">

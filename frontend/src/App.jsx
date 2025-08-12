@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import {
@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select.jsx";
 import InvoicePage from "./InvoicePage.jsx";
+import KashierPaymentModal from "./components/KashierPaymentModal.jsx";
 import Swal from "sweetalert2";
 import "./App.css";
 
@@ -52,6 +53,30 @@ const API_BASE_URL =
 function App() {
   const [phoneNumber, setPhoneNumber] = useState("");
 
+  // Helper function to format phone number
+  const formatPhoneNumber = (value) => {
+    // Remove all non-digits
+    const cleaned = value.replace(/\D/g, "");
+
+    // If it starts with 10, add 0 prefix
+    if (cleaned.startsWith("10") && cleaned.length === 10) {
+      return "0" + cleaned;
+    }
+
+    // If it starts with 010, keep as is
+    if (cleaned.startsWith("010") && cleaned.length === 11) {
+      return cleaned;
+    }
+
+    // Otherwise, return as entered
+    return cleaned;
+  };
+
+  const handlePhoneNumberChange = (e) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setPhoneNumber(formatted);
+  };
+
   const [amount, setAmount] = useState("");
   const [landlineNumber, setLandlineNumber] = useState("");
   const [internetPackage, setInternetPackage] = useState("");
@@ -65,12 +90,28 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Kashier payment states
+  const [showKashierModal, setShowKashierModal] = useState(false);
+  const [kashierSession, setKashierSession] = useState(null);
+
   const handleBalanceRecharge = () => {
     if (!phoneNumber || !amount) {
       Swal.fire({
         icon: "warning",
         title: "معلومات ناقصة",
         text: "يرجى إدخال رقم الهاتف واختيار المبلغ",
+        confirmButtonText: "حسناً",
+      });
+      return;
+    }
+
+    // Validate phone number format
+    const phoneRegex = /^010[0-9]{8}$/;
+    if (!phoneRegex.test(phoneNumber)) {
+      Swal.fire({
+        icon: "error",
+        title: "رقم هاتف غير صحيح",
+        text: "يرجى إدخال رقم هاتف فودافون مصر صحيح (يبدأ بـ 010)",
         confirmButtonText: "حسناً",
       });
       return;
@@ -83,7 +124,7 @@ function App() {
     setInvoiceData({
       type: "mobile",
       number: phoneNumber,
-      vodafoneCashNumber: phoneNumber, // Use same number for both
+
       amount: parsedAmount,
       serviceFee: serviceFee,
       totalAmount: totalAmount,
@@ -145,7 +186,7 @@ function App() {
     setShowInvoice(true);
   };
 
-  // Create payment request
+  // Create Kashier payment session
   const handleConfirmPurchase = async () => {
     if (!invoiceData) return;
 
@@ -168,8 +209,8 @@ function App() {
       // Show initial processing message
       Swal.fire({
         icon: "info",
-        title: "جاري التحقق من المنتج والرصيد...",
-        text: "يرجى الانتظار بينما نتحقق من توفر المنتج ورصيد الحساب",
+        title: "جاري إنشاء جلسة الدفع...",
+        text: "يرجى الانتظار بينما نقوم بإنشاء جلسة الدفع الآمنة",
         allowOutsideClick: false,
         showConfirmButton: false,
         didOpen: () => {
@@ -177,56 +218,55 @@ function App() {
         },
       });
 
-      const response = await fetch(`${API_BASE_URL}/api/payment/create`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phoneNumber: invoiceData.number,
-          vodafoneCashNumber: invoiceData.vodafoneCashNumber,
-          amount: invoiceData.amount, // Original amount without service fee
-        }),
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/kashier/create-session`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            phoneNumber: invoiceData.number,
+
+            amount: invoiceData.amount, // Original amount without service fee
+          }),
+        }
+      );
 
       const data = await response.json();
 
       if (!data.success) {
         Swal.close();
-        throw new Error(data.message || "فشل في إنشاء طلب الدفع");
+        throw new Error(data.message || "فشل في إنشاء جلسة الدفع");
       }
 
       setPaymentData(data);
-      setPaymentId(data.paymentId);
+      setPaymentId(data.sessionId);
 
-      // Show payment instructions with enhanced information
-      Swal.fire({
-        icon: "success",
-        title: "تم التحقق بنجاح!",
-        html: `
-          <div style="text-align: center; line-height: 1.6;">
-            <p style="color: #28a745; font-weight: bold;">✓ تم التحقق من المنتج</p>
-            <p style="color: #28a745; font-weight: bold;">✓ تم التحقق من الرصيد</p>
-            <p style="color: #28a745; font-weight: bold;">✓ تم إنشاء طلب الدفع</p>
-            <hr style="margin: 15px 0;">
-            <p><strong>اتصل بـ *9*1# واتبع التعليمات</strong></p>
-            <p>رمز المرجع: <span style="font-size: 1.2em; color: #007bff; font-weight: bold;">${data.reference}</span></p>
-            <p style="color: #6c757d;">سيتم التحقق من الدفع تلقائياً...</p>
-          </div>
-        `,
-        confirmButtonText: "حسناً",
-        allowOutsideClick: false,
-      });
+      // Store payment info in localStorage for success message
+      const paymentInfo = {
+        phoneNumber: invoiceData.number,
+        amount: invoiceData.totalAmount, // Store the total amount that was actually paid
+        originalAmount: invoiceData.amount, // Store original amount for reference
+        serviceFee: invoiceData.serviceFee, // Store service fee for transparency
+        orderId: data.orderId,
+        sessionId: data.sessionId,
+      };
+      localStorage.setItem("paymentData", JSON.stringify(paymentInfo));
 
-      // Start checking payment status automatically
-      startPaymentStatusCheck(data.paymentId, data.reference);
+      // Close loading dialog
+      Swal.close();
+
+      // Redirect to backend-served iframe page (bypasses CSP issues)
+      const iframeUrl = `${API_BASE_URL}/api/kashier/iframe/${data.sessionId}`;
+      window.location.href = iframeUrl;
     } catch (err) {
-      setError(err.message || "حدث خطأ في إنشاء طلب الدفع");
+      setError(err.message || "حدث خطأ في إنشاء جلسة الدفع");
       setPaymentStep("invoice");
       Swal.fire({
         icon: "error",
         title: "خطأ في العملية",
-        text: err.message || "حدث خطأ في إنشاء طلب الدفع",
+        text: err.message || "حدث خطأ في إنشاء جلسة الدفع",
         confirmButtonText: "حسناً",
       });
     } finally {
@@ -234,145 +274,114 @@ function App() {
     }
   };
 
-  // Check payment status and process top-up
-  const startPaymentStatusCheck = (paymentId, reference) => {
-    setPaymentStep("checking-status");
+  // Handle Kashier payment success
+  const handlePaymentSuccess = () => {
+    setShowKashierModal(false);
+    setKashierSession(null);
 
-    const checkInterval = setInterval(async () => {
+    // Get stored payment data if available
+    const storedData = localStorage.getItem("paymentData");
+    let paymentInfo = null;
+    if (storedData) {
       try {
-        const response = await fetch(
-          `${API_BASE_URL}/api/payment/check-and-process`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ paymentId, reference }),
-          }
-        );
-
-        const data = await response.json();
-
-        if (response.status === 202 && data.shouldRetry) {
-          // Payment is still pending, continue checking
-          return;
-        }
-
-        // Clear the interval as we have a final result (success or failure)
-        clearInterval(checkInterval);
-
-        if (data.success) {
-          // Payment completed and top-up successful
-          setPaymentStep("completed");
-          Swal.fire({
-            icon: "success",
-            title: `🎉 تم شحن الرصيد بنجاح!`,
-            html: `
-              <div style="text-align: center; line-height: 1.8;">
-
-                <p style="color: #28a745; font-weight: bold; margin: 10px 0;">✓ تم تأكيد الدفع</p>
-                <p style="color: #28a745; font-weight: bold; margin: 10px 0;">✓ تم طلب الشحن من Uquid</p>
-                <p style="color: #28a745; font-weight: bold; margin: 10px 0;">✓ تم تأكيد الطلب</p>
-                <hr style="margin: 15px 0;">
-                <p style="font-size: 1.1em; margin: 10px 0;">
-                  <strong>المبلغ المشحون:</strong> 
-                  <span style="color: #28a745; font-weight: bold;">${
-                    data.transaction.topUpAmount
-                  } جنيه</span>
-                </p>
-                <p style="font-size: 1.1em; margin: 10px 0;">
-                  <strong>رقم الهاتف:</strong> 
-                  <span style="color: #007bff; font-weight: bold;">${
-                    data.transaction.phoneNumber
-                  }</span>
-                </p>
-                ${
-                  data.transaction.vodafoneCashNumber &&
-                  data.transaction.vodafoneCashNumber !==
-                    data.transaction.phoneNumber
-                    ? `
-                <p style="font-size: 1.1em; margin: 10px 0;">
-                  <strong>رقم فودافون كاش المستخدم:</strong> 
-                  <span style="color: #007bff; font-weight: bold;">${data.transaction.vodafoneCashNumber}</span>
-                </p>
-                `
-                    : ""
-                }
-                <p style="font-size: 1em; margin: 10px 0; color: #6c757d;">
-                  <strong>رقم الطلب:</strong> ${
-                    data.uquidOrder?.batch_id || "غير متوفر"
-                  }
-                </p>
-              </div>
-            `,
-            confirmButtonText: "ممتاز!",
-            timer: 8000,
-            timerProgressBar: true,
-          });
-
-          // Reset form
-          setShowInvoice(false);
-          setPhoneNumber("");
-          setAmount("");
-          resetPaymentFlow();
-        } else {
-          // Payment failed or rejected
-          const errorMessage = data.message || "حدث خطأ في عملية الدفع";
-          setError(`فشل في الدفع: ${errorMessage}`);
-          setPaymentStep("invoice");
-
-          // Check if it's a payment rejection (not a network error)
-          const isPaymentRejected =
-            response.status === 400 &&
-            (errorMessage.includes("rejected") ||
-              errorMessage.includes("failed") ||
-              errorMessage.includes("cancelled") ||
-              errorMessage.includes("فاشله") ||
-              errorMessage.includes("عمليه فاشله"));
-
-          Swal.fire({
-            icon: isPaymentRejected ? "warning" : "error",
-            title: isPaymentRejected ? "تم رفض الدفع" : "فشل في العملية",
-            text: errorMessage,
-            confirmButtonText: "حسناً",
-          });
-
-          // Reset form on payment rejection
-          if (isPaymentRejected) {
-            setShowInvoice(false);
-            setPhoneNumber("");
-            setAmount("");
-            resetPaymentFlow();
-          }
-        }
-      } catch (error) {
-        clearInterval(checkInterval);
-        const errorMessage = error.message || "حدث خطأ في التحقق من حالة الدفع";
-        setError(errorMessage);
-        setPaymentStep("invoice");
-        Swal.fire({
-          icon: "error",
-          title: "خطأ في الاتصال",
-          text: errorMessage + ". يرجى المحاولة مرة أخرى.",
-          confirmButtonText: "حسناً",
-        });
+        paymentInfo = JSON.parse(storedData);
+      } catch (e) {
+        console.error("Error parsing stored payment data:", e);
       }
-    }, 10000); // Check every 10 seconds
+    }
 
-    // Stop checking after 10 minutes (60 attempts)
-    setTimeout(() => {
-      clearInterval(checkInterval);
-      if (paymentStep === "checking-status") {
-        setError("انتهت مهلة التحقق من الدفع. يرجى المحاولة مرة أخرى.");
-        setPaymentStep("invoice");
-        Swal.fire({
-          icon: "warning",
-          title: "انتهت المهلة",
-          text: "انتهت مهلة التحقق من الدفع. يرجى المحاولة مرة أخرى.",
-          confirmButtonText: "حسناً",
-        });
-      }
-    }, 600000); // 10 minutes
+    Swal.fire({
+      icon: "success",
+      title: `🎉 تم شحن الرصيد بنجاح!`,
+      html: `
+        <div style="text-align: center; line-height: 1.8;">
+          <p style="color: #28a745; font-weight: bold; margin: 10px 0;">✓ تم تأكيد الدفع</p>
+          <p style="color: #28a745; font-weight: bold; margin: 10px 0;">✓ تم شحن الرصيد بنجاح</p>
+          <hr style="margin: 15px 0;">
+          <p style="font-size: 1.1em; margin: 10px 0;">
+            <strong>المبلغ المدفوع:</strong> 
+            <span style="color: #28a745; font-weight: bold;">${
+              paymentInfo?.amount || invoiceData?.totalAmount || "10"
+            } جنيه</span>
+          </p>
+          <p style="font-size: 1em; margin: 8px 0; color: #6b7280;">
+            <strong>المبلغ المشحون:</strong> 
+            <span style="color: #059669; font-weight: bold;">${
+              paymentInfo?.originalAmount || invoiceData?.amount || "8"
+            } جنيه</span>
+            ${
+              paymentInfo?.serviceFee
+                ? `<br><small>رسوم الخدمة: ${paymentInfo.serviceFee} جنيه</small>`
+                : ""
+            }
+          </p>
+          <p style="font-size: 1.1em; margin: 10px 0;">
+            <strong>رقم الهاتف:</strong> 
+            <span style="color: #007bff; font-weight: bold;">${
+              paymentInfo?.phoneNumber || invoiceData?.number || "تم شحنه بنجاح"
+            }</span>
+          </p>
+          <p style="color: #6b7280; font-size: 0.9em; margin-top: 15px;">
+            سيتم إضافة الرصيد خلال دقائق قليلة
+          </p>
+          <p style="font-size: 1.1em; margin: 10px 0;">
+            <strong>حالة العملية:</strong> 
+            <span style="color: #28a745; font-weight: bold;">مكتملة ✅</span>
+          </p>
+        </div>
+      `,
+      confirmButtonText: "ممتاز!",
+      timer: 8000,
+      timerProgressBar: true,
+    });
+
+    // Clean up localStorage
+    localStorage.removeItem("paymentData");
+
+    // Reset form
+    setShowInvoice(false);
+    setPhoneNumber("");
+    setAmount("");
+    resetPaymentFlow();
+  };
+
+  // Check URL parameters for payment redirect
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get("success");
+    const error = urlParams.get("error");
+    const orderId = urlParams.get("orderId");
+
+    if (success === "true" && orderId) {
+      // Clear URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      // Show success message
+      handlePaymentSuccess(orderId);
+    } else if (error && orderId) {
+      // Clear URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      // Show error message
+      handlePaymentError(
+        error === "payment_failed" ? "فشل في عملية الدفع" : "حدث خطأ في العملية"
+      );
+    }
+  }, []);
+
+  // Handle Kashier payment error
+  const handlePaymentError = (error) => {
+    setShowKashierModal(false);
+    setKashierSession(null);
+
+    Swal.fire({
+      icon: "error",
+      title: "فشل في الدفع",
+      text: error || "حدث خطأ في عملية الدفع",
+      confirmButtonText: "حسناً",
+    });
+
+    resetPaymentFlow();
   };
 
   // Reset payment flow
@@ -386,6 +395,8 @@ function App() {
     setPaymentId("");
     setError("");
     setLoading(false);
+    setShowKashierModal(false);
+    setKashierSession(null);
   };
 
   const handleCancelPurchase = () => {
@@ -654,7 +665,7 @@ function App() {
                         type="tel"
                         placeholder="010XXXXXXXX"
                         value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        onChange={handlePhoneNumberChange}
                         className="w-full text-right border-2 border-gray-200 focus:border-red-500 rounded-2xl p-6 text-black text-xl font-medium transition-all duration-300 shadow-lg focus:shadow-xl focus:ring-4 focus:ring-red-500/20"
                       />
                       <p className="text-gray-600 text-sm mt-3 text-right font-medium">
@@ -953,6 +964,17 @@ function App() {
           </footer>
         </>
       )}
+
+      {/* Kashier Payment Modal */}
+      <KashierPaymentModal
+        isOpen={showKashierModal}
+        onClose={() => setShowKashierModal(false)}
+        sessionUrl={kashierSession?.sessionUrl}
+        orderId={kashierSession?.orderId}
+        amount={kashierSession?.amount}
+        onPaymentSuccess={handlePaymentSuccess}
+        onPaymentError={handlePaymentError}
+      />
     </div>
   );
 }

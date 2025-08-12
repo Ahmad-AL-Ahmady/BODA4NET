@@ -2,6 +2,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import slowDown from "express-slow-down";
 import { body, validationResult } from "express-validator";
+import { BUSINESS_CONFIG } from "../config/index.js";
 
 // Security headers middleware
 export const securityHeaders = helmet({
@@ -11,8 +12,26 @@ export const securityHeaders = helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:"],
-      scriptSrc: ["'self'"],
-      connectSrc: ["'self'", "https://shop.uquid.com"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "https://payments.kashier.io",
+        "https://*.kashier.io",
+      ],
+      scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers
+      frameSrc: [
+        "'self'",
+        "https://payments.kashier.io",
+        "https://*.kashier.io",
+      ],
+      connectSrc: [
+        "'self'",
+        "https://shop.uquid.com",
+        "https://payments.kashier.io",
+        "https://*.kashier.io",
+        "https://test-api.kashier.io",
+        "https://api.kashier.io",
+      ],
     },
   },
   crossOriginEmbedderPolicy: false,
@@ -42,12 +61,14 @@ export const speedLimiter = slowDown({
 
 // Validation middleware
 export const validatePhoneNumber = body("phoneNumber")
-  .matches(/^010[0-9]{8}$/)
+  .matches(BUSINESS_CONFIG.PHONE_REGEX)
   .withMessage("Invalid Vodafone Egypt phone number format");
 
 export const validateAmount = body("amount")
-  .isFloat({ min: 5, max: 1000 })
-  .withMessage("Amount must be between 5 and 1000 EGP");
+  .isFloat({ min: BUSINESS_CONFIG.MIN_AMOUNT, max: BUSINESS_CONFIG.MAX_AMOUNT })
+  .withMessage(
+    `Amount must be between ${BUSINESS_CONFIG.MIN_AMOUNT} and ${BUSINESS_CONFIG.MAX_AMOUNT} EGP`
+  );
 
 export const validatePaymentData = [
   body("paymentId").notEmpty().withMessage("Payment ID is required"),
@@ -58,10 +79,23 @@ export const validatePaymentData = [
 export const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.error("Validation errors:", {
+      url: req.url,
+      method: req.method,
+      body: req.body,
+      errors: errors.array(),
+    });
+
     return res.status(400).json({
       success: false,
       message: "Validation failed",
       errors: errors.array(),
+      details: {
+        phoneNumber: req.body.phoneNumber,
+        amount: req.body.amount,
+        expectedPhoneFormat: "010XXXXXXXX",
+        expectedAmountRange: `${BUSINESS_CONFIG.MIN_AMOUNT}-${BUSINESS_CONFIG.MAX_AMOUNT} EGP`,
+      },
     });
   }
   next();

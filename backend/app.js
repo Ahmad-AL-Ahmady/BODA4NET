@@ -21,6 +21,7 @@ import {
 
 // Import route modules
 import paymentRoutes from "./routes/paymentRoutes.js";
+import kashierRoutes from "./routes/kashierRoutes.js";
 import vodafoneRoutes from "./routes/vodafoneRoutes.js";
 import healthRoutes from "./routes/healthRoutes.js";
 
@@ -89,10 +90,16 @@ export function createApp() {
   app.use("/api/", validateApiKeys);
 
   // Serve static files
-  app.use(express.static(path.join(__dirname, "../dist")));
+  app.use(express.static(path.join(__dirname, "../frontend/dist")));
+
+  // Handle favicon requests to prevent 404 errors
+  app.get("/favicon.ico", (req, res) => {
+    res.status(204).end();
+  });
 
   // API Routes
   app.use("/api/payment", paymentRoutes);
+  app.use("/api/kashier", kashierRoutes);
   app.use("/api/vodafone", vodafoneRoutes);
   app.use("/api/account", vodafoneRoutes); // Account balance route is in vodafone routes
   app.use("/api/uquid", vodafoneRoutes); // Uquid-specific routes are in vodafone routes
@@ -100,7 +107,7 @@ export function createApp() {
 
   // Serve React app for all other routes
   app.get("*", (req, res) => {
-    res.sendFile(path.join(__dirname, "../dist", "index.html"));
+    res.sendFile(path.join(__dirname, "../frontend/dist", "index.html"));
   });
 
   return app;

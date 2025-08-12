@@ -30,16 +30,37 @@ export const UQUID_CONFIG = {
   MAX_API_AMOUNT: 200, // Maximum amount per API call
 };
 
+// Kashier API configuration
+export const KASHIER_CONFIG = {
+  API_KEY: process.env.KASHIER_PAYMENT_API_KEY?.trim(),
+  API_SECRET: process.env.KASHIER_SECRET_KEY?.trim(),
+  MERCHANT_ID: process.env.KASHIER_MERCHANT_ID?.trim(),
+  MODE: process.env.KASHIER_MODE || "test", // test or live
+  BASE_URL:
+    process.env.KASHIER_MODE === "live"
+      ? "https://api.kashier.io"
+      : "https://test-api.kashier.io",
+  PAYMENT_UI_URL: "https://payments.kashier.io/kashier-checkout.js",
+  SESSION_URL:
+    process.env.KASHIER_MODE === "live"
+      ? "https://payments.kashier.io/session"
+      : "https://payments.kashier.io/session",
+};
+
 // Business logic configuration
 export const BUSINESS_CONFIG = {
-  MIN_AMOUNT: 5,
-  MAX_AMOUNT: 2000,
-  SERVICE_FEE_RATE: 0.2, // 20% service fee
+  MIN_AMOUNT: parseInt(process.env.MIN_AMOUNT) || 5,
+  MAX_AMOUNT: parseInt(process.env.MAX_AMOUNT) || 2000,
+  SERVICE_FEE_RATE: parseFloat(process.env.SERVICE_FEE_RATE) || 0.2, // 20% service fee
   AVAILABLE_DENOMINATIONS: [100, 50, 25, 20, 15, 10],
   PHONE_REGEX: /^010[0-9]{8}$/,
-  ORDER_DELAY_MS: 500, // Delay between orders
-  CONFIRMATION_DELAY_MS: 500, // Delay between confirmations
-  API_SEQUENCE_DELAY_MS: 1000, // Delay for API sequencing
+  ORDER_DELAY_MS: parseInt(process.env.ORDER_DELAY_MS) || 500, // Delay between orders
+  CONFIRMATION_DELAY_MS: parseInt(process.env.CONFIRMATION_DELAY_MS) || 500, // Delay between confirmations
+  API_SEQUENCE_DELAY_MS: parseInt(process.env.API_SEQUENCE_DELAY_MS) || 1000, // Delay for API sequencing
+  // Production settings
+  ENABLE_LOGGING: process.env.ENABLE_LOGGING !== "false",
+  ENABLE_METRICS: process.env.ENABLE_METRICS !== "false",
+  SESSION_TIMEOUT_MS: parseInt(process.env.SESSION_TIMEOUT_MS) || 600000, // 10 minutes
 };
 
 // Logging configuration
@@ -60,21 +81,51 @@ export const HEALTH_CONFIG = {
   HEALTH_TIMEOUT: 5000,
 };
 
+// Frontend URL configuration
+export const FRONTEND_CONFIG = {
+  URL:
+    process.env.FRONTEND_URL ||
+    (SERVER_CONFIG.NODE_ENV === "development"
+      ? "http://localhost:5173"
+      : "http://localhost:3001"),
+  DEV_URL: "http://localhost:5173",
+  PROD_URL: process.env.FRONTEND_URL || "http://localhost:3001",
+};
+
 // CORS configuration
 export const CORS_CONFIG = {
   ALLOWED_ORIGINS: [
-    "http://localhost:5173", // Vite dev server
-    "http://localhost:3000", // React dev server
-    "http://localhost:3001", // Same origin
-    process.env.FRONTEND_URL, // Environment variable for production
-  ].filter(Boolean), // Remove undefined values
+    // Development origins
+    ...(SERVER_CONFIG.NODE_ENV === "development"
+      ? [
+          "http://localhost:5173", // Vite dev server
+          "http://localhost:3000", // React dev server
+          "http://localhost:3001", // Same origin
+          "http://wwww.boda4net.com",
+          "http://boda4net.com",
+        ]
+      : []),
+    // Production origins
+    ...(SERVER_CONFIG.NODE_ENV === "production"
+      ? [
+          process.env.FRONTEND_URL, // Production frontend URL
+          process.env.ADMIN_URL, // Admin panel URL (if different)
+        ].filter(Boolean)
+      : []),
+  ],
   CREDENTIALS: true,
   METHODS: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   ALLOWED_HEADERS: ["Content-Type", "Authorization", "X-Requested-With"],
 };
 
 // Required environment variables
-export const REQUIRED_ENV_VARS = ["UQ_PUBLIC_KEY", "UQ_SECRET_KEY"];
+export const REQUIRED_ENV_VARS = [
+  "UQ_PUBLIC_KEY",
+  "UQ_SECRET_KEY",
+  "KASHIER_PAYMENT_API_KEY",
+  "KASHIER_SECRET_KEY",
+  "KASHIER_MERCHANT_ID",
+];
 
 // Validate required environment variables
 export function validateEnvironment() {
@@ -88,10 +139,30 @@ export function validateEnvironment() {
     missing.push("Uquid credentials");
   }
 
+  if (
+    !KASHIER_CONFIG.API_KEY ||
+    !KASHIER_CONFIG.API_SECRET ||
+    !KASHIER_CONFIG.MERCHANT_ID
+  ) {
+    console.error(
+      "❌ Missing Kashier API credentials. Please set KASHIER_PAYMENT_API_KEY, KASHIER_SECRET_KEY and KASHIER_MERCHANT_ID in your .env file"
+    );
+    console.error(
+      "📝 Copy env.example to .env and fill in your Kashier API keys"
+    );
+    missing.push("Kashier credentials");
+  }
+
   return missing;
 }
 
 // Check if all required configurations are available
 export function isConfigurationValid() {
-  return UQUID_CONFIG.API_KEY && UQUID_CONFIG.API_SECRET;
+  return (
+    UQUID_CONFIG.API_KEY &&
+    UQUID_CONFIG.API_SECRET &&
+    KASHIER_CONFIG.API_KEY &&
+    KASHIER_CONFIG.API_SECRET &&
+    KASHIER_CONFIG.MERCHANT_ID
+  );
 }

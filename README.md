@@ -8,7 +8,7 @@ BODA4NET is a full-stack web application for Vodafone Egypt mobile top-ups and h
 
 - **Frontend**: React.js with Vite, TailwindCSS, and Shadcn/ui components
 - **Backend**: Node.js/Express.js server with RESTful API
-- **Payment Integration**: Payment gateway integration ready (sha7nawy removed)
+- **Payment Integration**: Kashier payment gateway for secure transactions
 - **Top-up Service**: Uquid API for Vodafone Egypt mobile recharges
 - **UI Framework**: Shadcn/ui component library with TailwindCSS styling
 
@@ -83,11 +83,11 @@ backend/
 
 1. User selects phone number and amount
 2. System generates invoice with 20% service fee
-3. Payment service integration (payment provider removed)
-4. User pays via *9*1# USSD code
-5. System automatically checks payment status every 10 seconds
-6. Upon successful payment, triggers Uquid top-up
-7. Displays success confirmation
+3. Kashier payment gateway integration
+4. User completes payment through secure iframe
+5. Kashier sends webhook notification to backend
+6. Backend processes Uquid top-up automatically
+7. User is redirected with success/error status
 
 ## Dependencies
 
@@ -113,8 +113,12 @@ backend/
 
 ### Payment Management
 
-- `POST /api/payment/create` - Create payment request (temporarily unavailable)
-- `POST /api/payment/check-and-process` - Check payment & process top-up
+- `POST /api/kashier/create-session` - Create Kashier payment session
+- `POST /api/kashier/webhook` - Kashier webhook endpoint
+- `GET /api/kashier/redirect` - Payment redirect endpoint
+- `GET /api/kashier/session/:sessionId/status` - Get payment session status
+- `POST /api/payment/create` - Legacy payment endpoint (test mode)
+- `POST /api/payment/check-and-process` - Legacy payment processing
 - `GET /api/payment/info/:transactionId` - Get payment information
 
 ### Vodafone Services
@@ -224,7 +228,10 @@ cp .env.example .env.local
 - `CORS_ORIGIN` - Allowed frontend origins
 - `FRONTEND_URL` - Main frontend URL
 - `UQ_PUBLIC_KEY` & `UQ_SECRET_KEY` - Uquid API credentials
-- Payment gateway credentials (sha7nawy removed, add your new payment provider credentials)
+- `KASHIER_PAYMENT_API_KEY` - Kashier payment API key
+- `KASHIER_SECRET_KEY` - Kashier secret key for hash generation
+- `KASHIER_MERCHANT_ID` - Kashier merchant ID
+- `KASHIER_MODE` - Kashier mode (test/live)
 
 3. **Start Development Servers**
 
@@ -364,9 +371,10 @@ heroku create boda4net-backend
 # Set environment variables
 heroku config:set UQ_PUBLIC_KEY=your_key -a boda4net-backend
 heroku config:set UQ_SECRET_KEY=your_secret -a boda4net-backend
-# heroku config:set SHA7NAWY_PUBLIC_KEY=your_key -a boda4net-backend (removed)
-# heroku config:set SHA7NAWY_SECRET_KEY=your_secret -a boda4net-backend (removed)
-# Add your new payment provider credentials here
+heroku config:set KASHIER_PAYMENT_API_KEY=your_kashier_payment_key -a boda4net-backend
+heroku config:set KASHIER_SECRET_KEY=your_kashier_secret_key -a boda4net-backend
+heroku config:set KASHIER_MERCHANT_ID=your_merchant_id -a boda4net-backend
+heroku config:set KASHIER_MODE=test -a boda4net-backend
 
 # Deploy
 git push heroku main
@@ -416,7 +424,7 @@ Currently, the application doesn't use a persistent database. For production use
 2. **API Monitoring**
 
    - Monitor Uquid API usage and limits
-   - Track payment success rates (for new payment provider)
+   - Track Kashier payment success rates
    - Set up alerting for failed transactions
 
 3. **Performance Optimization**
@@ -430,7 +438,7 @@ Currently, the application doesn't use a persistent database. For production use
 1. **CORS Errors**: Ensure backend CORS is configured for your frontend domain
 2. **API Failures**: Check environment variables and API credentials
 3. **Build Failures**: Verify Node.js version compatibility
-4. **Payment Issues**: Verify payment gateway credentials and network connectivity
+4. **Payment Issues**: Verify Kashier credentials and network connectivity
 5. **Top-up Failures**: Check Uquid API status and account balance
 
 ### Support & Maintenance
@@ -441,3 +449,7 @@ Currently, the application doesn't use a persistent database. For production use
 - **Testing**: Ready for unit and integration test implementation
 
 This application is production-ready with proper error handling, user feedback, and comprehensive payment flow management.
+
+## Kashier Payment Gateway Setup
+
+For detailed instructions on setting up the Kashier payment gateway, see [KASHIER_SETUP.md](./KASHIER_SETUP.md).
