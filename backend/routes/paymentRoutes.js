@@ -40,11 +40,13 @@ router.post(
 
     try {
       const { phoneNumber, vodafoneCashNumber, amount } = req.body;
+      // Use phoneNumber for both if vodafoneCashNumber is not provided
+      const effectiveVodafoneCashNumber = vodafoneCashNumber || phoneNumber;
 
       logger.info(`[PAYMENT-${flowId}] 🚀 TEST MODE - Payment flow started:`, {
         flowId,
         phoneNumber: maskPhoneNumber(phoneNumber),
-        vodafoneCashNumber: maskPhoneNumber(vodafoneCashNumber),
+        vodafoneCashNumber: maskPhoneNumber(effectiveVodafoneCashNumber),
         amount,
         ip: req.ip,
         userAgent: req.headers["user-agent"],
@@ -52,22 +54,19 @@ router.post(
       });
 
       // Validate required fields
-      if (!phoneNumber || !vodafoneCashNumber || !amount) {
+      if (!phoneNumber || !amount) {
         logger.error(`[PAYMENT-${flowId}] ❌ Missing required fields:`, {
           phoneNumber: !!phoneNumber,
-          vodafoneCashNumber: !!vodafoneCashNumber,
           amount: !!amount,
         });
 
         return res.status(400).json({
           success: false,
-          message:
-            "Phone number, Vodafone Cash number, and amount are required",
+          message: "Phone number and amount are required",
           flowId,
           debug: {
             receivedFields: {
               phoneNumber: !!phoneNumber,
-              vodafoneCashNumber: !!vodafoneCashNumber,
               amount: !!amount,
             },
           },
@@ -92,12 +91,16 @@ router.post(
         });
       }
 
-      // Validate Vodafone Cash number format
-      if (!isValidVodafoneNumber(vodafoneCashNumber)) {
+      // Validate Vodafone Cash number format (only if different from phoneNumber)
+      if (
+        vodafoneCashNumber &&
+        vodafoneCashNumber !== phoneNumber &&
+        !isValidVodafoneNumber(effectiveVodafoneCashNumber)
+      ) {
         logger.error(
           `[PAYMENT-${flowId}] ❌ Invalid Vodafone Cash number format:`,
           {
-            vodafoneCashNumber: maskPhoneNumber(vodafoneCashNumber),
+            vodafoneCashNumber: maskPhoneNumber(effectiveVodafoneCashNumber),
             format: "Should be 010XXXXXXXX",
           }
         );
@@ -108,8 +111,9 @@ router.post(
             "Invalid Vodafone Cash number format (must be Vodafone Egypt)",
           flowId,
           debug: {
-            vodafoneCashNumberLength: vodafoneCashNumber.length,
-            startsWithCorrectPrefix: vodafoneCashNumber.startsWith("010"),
+            vodafoneCashNumberLength: effectiveVodafoneCashNumber.length,
+            startsWithCorrectPrefix:
+              effectiveVodafoneCashNumber.startsWith("010"),
           },
         });
       }
@@ -174,7 +178,7 @@ router.post(
       // Store payment data for test mode processing
       testPaymentStore.set(testPaymentId, {
         phoneNumber,
-        vodafoneCashNumber,
+        vodafoneCashNumber: effectiveVodafoneCashNumber,
         amount: topUpAmount,
         totalAmount,
         serviceFee,
