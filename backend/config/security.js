@@ -156,7 +156,7 @@ export const SECURITY_CONFIG = {
   // Input Validation
   VALIDATION: {
     PHONE_REGEX: /^010[0-9]{8}$/,
-    AMOUNT_MIN: parseInt(process.env.MIN_AMOUNT) || 5,
+    AMOUNT_MIN: parseInt(process.env.MIN_AMOUNT) || 8,
     AMOUNT_MAX: parseInt(process.env.MAX_AMOUNT) || 2000,
     MAX_STRING_LENGTH: 1000,
     ALLOWED_FILE_TYPES: ["image/jpeg", "image/png", "image/gif"],

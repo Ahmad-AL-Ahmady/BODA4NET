@@ -863,6 +863,12 @@ function App() {
                           <SelectItem value="140">140 جنيه</SelectItem>
                           <SelectItem value="150">150 جنيه</SelectItem>
                           <SelectItem value="200">200 جنيه</SelectItem>
+                          <SelectItem value="250">250 جنيه</SelectItem>
+                          <SelectItem value="260">260 جنيه</SelectItem>
+                          <SelectItem value="270">270 جنيه</SelectItem>
+                          <SelectItem value="280">280 جنيه</SelectItem>
+                          <SelectItem value="290">290 جنيه</SelectItem>
+                          <SelectItem value="300">300 جنيه</SelectItem>
                           <SelectItem value="500">500 جنيه</SelectItem>
                           <SelectItem value="750">750 جنيه</SelectItem>
                           <SelectItem value="1000">1000 جنيه</SelectItem>

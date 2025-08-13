@@ -49,7 +49,7 @@ export const KASHIER_CONFIG = {
 
 // Business logic configuration
 export const BUSINESS_CONFIG = {
-  MIN_AMOUNT: parseInt(process.env.MIN_AMOUNT) || 5,
+  MIN_AMOUNT: parseInt(process.env.MIN_AMOUNT) || 8,
   MAX_AMOUNT: parseInt(process.env.MAX_AMOUNT) || 2000,
   SERVICE_FEE_RATE: parseFloat(process.env.SERVICE_FEE_RATE) || 0.2, // 20% service fee
   AVAILABLE_DENOMINATIONS: [100, 50, 25, 20, 15, 10],

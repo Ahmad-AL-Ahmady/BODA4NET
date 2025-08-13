@@ -69,7 +69,7 @@ router.post("/submit-order", async (req, res) => {
     if (!isValidAmount(amount)) {
       return res.status(400).json({
         success: false,
-        message: "Amount must be between 5 and 2000 EGP",
+        message: "Amount must be between 8 and 2000 EGP",
       });
     }
 

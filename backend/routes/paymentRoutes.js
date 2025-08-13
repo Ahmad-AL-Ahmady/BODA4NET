@@ -122,7 +122,7 @@ router.post(
       if (!isValidAmount(amount)) {
         return res.status(400).json({
           success: false,
-          message: "Top-up amount must be between 5 and 2000 EGP",
+          message: "Top-up amount must be between 8 and 2000 EGP",
         });
       }
 

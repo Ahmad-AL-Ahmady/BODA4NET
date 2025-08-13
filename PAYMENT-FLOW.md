@@ -49,6 +49,10 @@ Content-Type: application/json
 }
 ```
 
+**Note**: Minimum amount is now 8 EGP (previously 5 EGP) as there are no API calls available for 5 EGP.
+
+````
+
 **Response**:
 
 ```json
@@ -63,7 +67,7 @@ Content-Type: application/json
   "uquidProduct": {...},
   "uquidBalance": 100
 }
-```
+````
 
 ### Payment Processing
 
