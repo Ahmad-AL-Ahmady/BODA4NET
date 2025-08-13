@@ -134,7 +134,7 @@ class KashierService {
           }
         : undefined,
       saveCard: "optional",
-      retrieveSavedCard: true,
+      retrieveSavedCard: false, // Disable saved card retrieval to prevent API errors
       interactionSource: "ECOMMERCE",
       enable3DS: true,
       serverWebhook,

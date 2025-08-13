@@ -87,9 +87,9 @@ export const FRONTEND_CONFIG = {
     process.env.FRONTEND_URL ||
     (SERVER_CONFIG.NODE_ENV === "development"
       ? "http://localhost:5173"
-      : "http://localhost:3001"),
+      : "https://boda4net.com"),
   DEV_URL: "http://localhost:5173",
-  PROD_URL: process.env.FRONTEND_URL || "http://localhost:3001",
+  PROD_URL: process.env.FRONTEND_URL || "https://boda4net.com",
 };
 
 // CORS configuration
@@ -101,13 +101,13 @@ export const CORS_CONFIG = {
           "http://localhost:5173", // Vite dev server
           "http://localhost:3000", // React dev server
           "http://localhost:3001", // Same origin
-          "http://wwww.boda4net.com",
-          "http://boda4net.com",
         ]
       : []),
     // Production origins
     ...(SERVER_CONFIG.NODE_ENV === "production"
       ? [
+          "https://boda4net.com",
+          "https://www.boda4net.com",
           process.env.FRONTEND_URL, // Production frontend URL
           process.env.ADMIN_URL, // Admin panel URL (if different)
         ].filter(Boolean)
