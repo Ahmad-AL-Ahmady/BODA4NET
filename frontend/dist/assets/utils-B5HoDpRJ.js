@@ -1,4 +1,4 @@
-import"./ui-BZZQHsWb.js";
+import"./ui-C7BkLbcN.js";
 /*!
 * sweetalert2 v11.22.2
 * Released under the MIT License.

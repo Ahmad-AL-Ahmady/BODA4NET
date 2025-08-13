@@ -114,7 +114,150 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Mobile-specific enhancements */
+@media (max-width: 768px) {
+
+  /* Improved touch targets */
+  button,
+  input,
+  select,
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Better spacing for mobile */
+  .mobile-container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  /* Enhanced text readability */
+  .mobile-text {
+    line-height: 1.6;
+    letter-spacing: 0.025em;
+  }
+
+  /* Improved form elements */
+  input[type="tel"],
+  input[type="number"],
+  select {
+    font-size: 16px !important;
+    /* Prevents zoom on iOS */
+    padding: 12px 16px;
+    border-radius: 12px;
+  }
+
+  /* Better button interactions */
+  button:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+
+  /* Enhanced focus states */
+  input:focus,
+  select:focus,
+  button:focus {
+    outline: 2px solid #ef4444;
+    outline-offset: 2px;
+  }
+
+  /* Improved card shadows */
+  .mobile-card {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+
+  /* Better gradient backgrounds */
+  .mobile-gradient {
+    background: linear-gradient(135deg, #fef2f2 0%, #fff7ed 50%, #fef2f2 100%);
+  }
+
+  /* Enhanced animations for mobile */
+  .mobile-fade-in {
+    animation: fadeIn 0.5s ease-out;
+  }
+
+  .mobile-slide-up {
+    animation: slideUp 0.6s ease-out;
+  }
+
+  .mobile-scale-in {
+    animation: scaleIn 0.4s ease-out;
+  }
+}
+
+/* Custom animations for mobile */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Enhanced hover effects for touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .hover\:scale-105:hover {
+    transform: none;
+  }
+
+  .hover\:shadow-3xl:hover {
+    box-shadow: inherit;
+  }
+}
+
+/* Improved accessibility */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Better contrast for mobile */
+@media (max-width: 768px) {
+  .mobile-high-contrast {
+    color: #1f2937;
+    background-color: #ffffff;
+  }
+
+  .mobile-text-shadow {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
 }

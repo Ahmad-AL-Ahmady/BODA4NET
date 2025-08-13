@@ -10,6 +10,16 @@ import {
   createRateLimit,
   speedLimiter,
   validateApiKeys,
+  securityMiddleware,
+  xssProtection,
+  hppProtection,
+  noSqlInjectionProtection,
+  sanitizeInput,
+  requestSizeLimit,
+  securityMonitor,
+  additionalSecurityHeaders,
+  secureCookies,
+  cspViolationHandler,
 } from "./middleware/security.js";
 import { requestLogger } from "./middleware/logger.js";
 import {
@@ -58,8 +68,19 @@ export function createApp() {
   // Global Middleware
   app.use(compression()); // Gzip compression
 
-  // Security headers
+  // Enhanced Security Middleware Stack
   app.use(securityHeaders);
+  app.use(xssProtection);
+  app.use(hppProtection);
+  app.use(noSqlInjectionProtection);
+  app.use(sanitizeInput);
+  app.use(requestSizeLimit);
+  app.use(securityMonitor);
+  app.use(additionalSecurityHeaders);
+  app.use(secureCookies);
+
+  // CSP Violation reporting endpoint
+  app.post("/api/csp-violation", cspViolationHandler);
 
   // Morgan HTTP request logging
   app.use(
@@ -79,7 +100,7 @@ export function createApp() {
     })
   );
 
-  // Rate limiting
+  // Enhanced Rate limiting
   app.use(
     "/api/",
     createRateLimit(RATE_LIMIT_CONFIG.WINDOW_MS, RATE_LIMIT_CONFIG.MAX_REQUESTS)

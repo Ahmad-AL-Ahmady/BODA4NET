@@ -11,6 +11,11 @@ import {
 import InvoicePage from "./InvoicePage.jsx";
 import KashierPaymentModal from "./components/KashierPaymentModal.jsx";
 import Swal from "sweetalert2";
+import {
+  useMobileFeatures,
+  useMobileInteractions,
+  usePreventZoom,
+} from "./hooks/use-mobile.js";
 import "./App.css";
 
 // Add custom animations for floating elements
@@ -27,6 +32,18 @@ const customStyles = `
     0%, 100% { transform: translateY(0px); }
     50% { transform: translateY(-10px); }
   }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.3); }
+    50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.6); }
+  }
+  @keyframes slide-up {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes scale-in {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
   .animate-float {
     animation: float 6s ease-in-out infinite;
   }
@@ -35,6 +52,104 @@ const customStyles = `
   }
   .animate-float-slow {
     animation: float-slow 10s ease-in-out infinite;
+  }
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+  .animate-slide-up {
+    animation: slide-up 0.6s ease-out;
+  }
+  .animate-scale-in {
+    animation: scale-in 0.4s ease-out;
+  }
+  
+  /* Mobile-specific enhancements */
+  @media (max-width: 768px) {
+    .mobile-padding {
+      padding: 1rem;
+    }
+    .mobile-text-lg {
+      font-size: 1.125rem;
+    }
+    .mobile-text-xl {
+      font-size: 1.25rem;
+    }
+    .mobile-text-2xl {
+      font-size: 1.5rem;
+    }
+    .mobile-text-3xl {
+      font-size: 1.875rem;
+    }
+    .mobile-gap-2 {
+      gap: 0.5rem;
+    }
+    .mobile-gap-3 {
+      gap: 0.75rem;
+    }
+    .mobile-gap-4 {
+      gap: 1rem;
+    }
+    .mobile-mb-4 {
+      margin-bottom: 1rem;
+    }
+    .mobile-mb-6 {
+      margin-bottom: 1.5rem;
+    }
+    .mobile-mb-8 {
+      margin-bottom: 2rem;
+    }
+    .mobile-p-4 {
+      padding: 1rem;
+    }
+    .mobile-p-6 {
+      padding: 1.5rem;
+    }
+    .mobile-p-8 {
+      padding: 2rem;
+    }
+    .mobile-rounded-2xl {
+      border-radius: 1rem;
+    }
+    .mobile-rounded-3xl {
+      border-radius: 1.5rem;
+    }
+  }
+  
+  /* Enhanced touch targets for mobile */
+  @media (max-width: 768px) {
+    .touch-target {
+      min-height: 44px;
+      min-width: 44px;
+    }
+    .touch-target-large {
+      min-height: 56px;
+      min-width: 56px;
+    }
+  }
+  
+  /* Improved focus states for mobile */
+  .mobile-focus:focus {
+    outline: 2px solid #ef4444;
+    outline-offset: 2px;
+  }
+  
+  /* Enhanced button states */
+  .btn-mobile-active:active {
+    transform: scale(0.95);
+  }
+  
+  /* Smooth scrolling for mobile */
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  /* Prevent zoom on input focus for iOS */
+  @media screen and (-webkit-min-device-pixel-ratio: 0) {
+    input[type="tel"],
+    input[type="number"],
+    select {
+      font-size: 16px;
+    }
   }
 `;
 
@@ -51,6 +166,11 @@ const API_BASE_URL =
   (import.meta.env.PROD ? window.location.origin : "http://localhost:3001");
 
 function App() {
+  // Mobile-specific hooks
+  const mobileFeatures = useMobileFeatures();
+  const mobileInteractions = useMobileInteractions();
+  usePreventZoom();
+
   const [phoneNumber, setPhoneNumber] = useState("");
 
   // Helper function to format phone number
@@ -588,25 +708,25 @@ function App() {
           {/* قسم شحن الرصيد */}
           <section
             id="balance"
-            className="py-20 bg-gradient-to-br from-gray-50 via-white to-red-50 relative"
+            className="py-8 md:py-20 bg-gradient-to-br from-gray-50 via-white to-red-50 relative"
           >
-            {/* Background decoration */}
+            {/* Enhanced Background decoration */}
             <div className="absolute inset-0 bg-gradient-to-br from-red-100/20 via-transparent to-orange-100/10"></div>
-            <div className="absolute top-0 left-0 w-64 h-64 bg-gradient-to-br from-red-200/10 to-orange-200/10 rounded-full blur-3xl"></div>
-            <div className="absolute bottom-0 right-0 w-64 h-64 bg-gradient-to-tl from-pink-200/10 to-red-200/10 rounded-full blur-3xl"></div>
-            <div className="container mx-auto px-4">
-              <div className="max-w-lg mx-auto">
-                {/* العنوان الرئيسي */}
-                <div className="text-center mb-8">
-                  <h2 className="text-3xl font-bold text-red-600 mb-2">
+            <div className="absolute top-0 left-0 w-32 h-32 md:w-64 md:h-64 bg-gradient-to-br from-red-200/10 to-orange-200/10 rounded-full blur-2xl md:blur-3xl"></div>
+            <div className="absolute bottom-0 right-0 w-32 h-32 md:w-64 md:h-64 bg-gradient-to-tl from-pink-200/10 to-red-200/10 rounded-full blur-2xl md:blur-3xl"></div>
+            <div className="container mx-auto px-4 mobile-padding">
+              <div className="max-w-lg mx-auto animate-slide-up">
+                {/* Enhanced العنوان الرئيسي */}
+                <div className="text-center mb-6 md:mb-8">
+                  <h2 className="text-2xl md:text-3xl font-bold text-red-600 mb-2 mobile-text-2xl">
                     شحن الرصيد
                   </h2>
-                  <div className="w-16 h-1 bg-red-600 mx-auto mb-4"></div>
+                  <div className="w-12 md:w-16 h-1 bg-red-600 mx-auto mb-3 md:mb-4"></div>
 
-                  {/* أيقونة الهاتف */}
-                  <div className="w-16 h-16 bg-red-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  {/* Enhanced أيقونة الهاتف with pulse effect */}
+                  <div className="w-12 h-12 md:w-16 md:h-16 bg-gradient-to-br from-red-500 to-red-600 rounded-xl md:rounded-lg flex items-center justify-center mx-auto mb-3 md:mb-4 animate-pulse-glow shadow-lg">
                     <svg
-                      className="w-8 h-8 text-white"
+                      className="w-6 h-6 md:w-8 md:h-8 text-white"
                       fill="currentColor"
                       viewBox="0 0 20 20"
                     >
@@ -614,26 +734,32 @@ function App() {
                     </svg>
                   </div>
 
-                  <h3 className="text-xl font-semibold text-red-600 mb-2">
+                  <h3 className="text-lg md:text-xl font-semibold text-red-600 mb-2 mobile-text-xl">
                     شحن رصيد فودافون
                   </h3>
-                  <p className="text-red-500 text-sm">
+                  <p className="text-red-500 text-sm mobile-text-lg">
                     أدخل رقم الهاتف المراد شحنه واختر المبلغ
                   </p>
                 </div>
 
-                <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-10 shadow-2xl border-0 ring-1 ring-gray-200/50 relative overflow-hidden">
+                <div
+                  className={`bg-white/80 backdrop-blur-sm rounded-2xl md:rounded-3xl p-6 md:p-10 shadow-2xl border-0 ring-1 ring-gray-200/50 relative overflow-hidden animate-scale-in ${
+                    mobileFeatures.isMobile ? "mobile-card" : ""
+                  }`}
+                >
                   {/* Enhanced Service Banner */}
-                  <div className="mb-8 p-6 bg-gradient-to-r from-green-400/10 via-emerald-400/10 to-teal-400/10 border border-green-300/30 rounded-2xl backdrop-blur-sm">
-                    <div className="flex items-center justify-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
-                        <span className="text-white text-xl">⚡</span>
+                  <div className="mb-6 md:mb-8 p-4 md:p-6 bg-gradient-to-r from-green-400/10 via-emerald-400/10 to-teal-400/10 border border-green-300/30 rounded-xl md:rounded-2xl backdrop-blur-sm">
+                    <div className="flex items-center justify-center gap-2 md:gap-3">
+                      <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg md:rounded-xl flex items-center justify-center">
+                        <span className="text-white text-lg md:text-xl">
+                          ⚡
+                        </span>
                       </div>
                       <div className="text-center">
-                        <p className="text-green-800 font-bold text-lg">
+                        <p className="text-green-800 font-bold text-base md:text-lg mobile-text-lg">
                           خدمة فورية وآمنة
                         </p>
-                        <p className="text-green-700 font-medium text-sm">
+                        <p className="text-green-700 font-medium text-xs md:text-sm mobile-text-lg">
                           شحن رصيد فودافون بأسرع وقت وأقل تكلفة
                         </p>
                       </div>
@@ -641,18 +767,18 @@ function App() {
                   </div>
 
                   {/* حقول الإدخال */}
-                  <div className="space-y-10">
+                  <div className="space-y-6 md:space-y-10">
                     <div>
                       <label
                         htmlFor="phone"
-                        className="text-right block mb-4 text-gray-800 font-bold text-xl flex items-center justify-end gap-3"
+                        className="text-right block mb-3 md:mb-4 text-gray-800 font-bold text-lg md:text-xl flex items-center justify-end gap-2 md:gap-3 mobile-text-xl"
                       >
                         <span className="bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
                           رقم الهاتف المراد شحنه
                         </span>
-                        <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-gradient-to-br from-red-500 to-orange-500 rounded-lg md:rounded-xl flex items-center justify-center shadow-lg touch-target">
                           <svg
-                            className="w-5 h-5 text-white"
+                            className="w-4 h-4 md:w-5 md:h-5 text-white"
                             fill="currentColor"
                             viewBox="0 0 20 20"
                           >
@@ -666,9 +792,9 @@ function App() {
                         placeholder="010XXXXXXXX"
                         value={phoneNumber}
                         onChange={handlePhoneNumberChange}
-                        className="w-full text-right border-2 border-gray-200 focus:border-red-500 rounded-2xl p-6 text-black text-xl font-medium transition-all duration-300 shadow-lg focus:shadow-xl focus:ring-4 focus:ring-red-500/20"
+                        className="w-full text-right border-2 border-gray-200 focus:border-red-500 rounded-xl md:rounded-2xl p-4 md:p-6 text-black text-lg md:text-xl font-medium transition-all duration-300 shadow-lg focus:shadow-xl focus:ring-4 focus:ring-red-500/20 mobile-focus touch-target-large"
                       />
-                      <p className="text-gray-600 text-sm mt-3 text-right font-medium">
+                      <p className="text-gray-600 text-xs md:text-sm mt-2 md:mt-3 text-right font-medium mobile-text-lg">
                         رقم فودافون يبدأ بـ 010
                       </p>
                     </div>
@@ -676,14 +802,14 @@ function App() {
                     <div>
                       <label
                         htmlFor="amount"
-                        className="text-right block mb-6 text-gray-800 font-bold text-xl flex items-center justify-end gap-3"
+                        className="text-right block mb-4 md:mb-6 text-gray-800 font-bold text-lg md:text-xl flex items-center justify-end gap-2 md:gap-3 mobile-text-xl"
                       >
                         <span className="bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
                           مبلغ الشحن
                         </span>
-                        <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg md:rounded-xl flex items-center justify-center shadow-lg touch-target">
                           <svg
-                            className="w-5 h-5 text-white"
+                            className="w-4 h-4 md:w-5 md:h-5 text-white"
                             fill="currentColor"
                             viewBox="0 0 20 20"
                           >
@@ -697,13 +823,13 @@ function App() {
                       </label>
 
                       {/* Enhanced Popular amounts as quick buttons */}
-                      <div className="grid grid-cols-4 gap-4 mb-6">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
                         {["10", "20", "50", "100"].map((value) => (
                           <button
                             key={value}
                             type="button"
                             onClick={() => setAmount(value)}
-                            className={`p-4 rounded-2xl text-center font-bold text-lg transition-all duration-300 transform hover:scale-105 ${
+                            className={`p-3 md:p-4 rounded-xl md:rounded-2xl text-center font-bold text-base md:text-lg transition-all duration-300 transform hover:scale-105 btn-mobile-active touch-target ${
                               amount === value
                                 ? "bg-gradient-to-r from-red-600 to-orange-600 text-white shadow-xl scale-105"
                                 : "bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 shadow-lg"
@@ -715,10 +841,10 @@ function App() {
                       </div>
 
                       <Select value={amount} onValueChange={setAmount}>
-                        <SelectTrigger className="w-full text-right border-2 border-gray-200 focus:border-red-500 rounded-2xl p-6 text-black text-xl font-medium transition-all duration-300 shadow-lg focus:shadow-xl focus:ring-4 focus:ring-red-500/20">
+                        <SelectTrigger className="w-full text-right border-2 border-gray-200 focus:border-red-500 rounded-xl md:rounded-2xl p-4 md:p-6 text-black text-lg md:text-xl font-medium transition-all duration-300 shadow-lg focus:shadow-xl focus:ring-4 focus:ring-red-500/20 mobile-focus touch-target-large">
                           <SelectValue placeholder="أو اختر مبلغاً آخر" />
                         </SelectTrigger>
-                        <SelectContent className="rounded-2xl">
+                        <SelectContent className="rounded-xl md:rounded-2xl">
                           <SelectItem value="8">8 جنيه</SelectItem>
                           <SelectItem value="9">9 جنيه</SelectItem>
                           <SelectItem value="15">15 جنيه</SelectItem>
@@ -746,24 +872,24 @@ function App() {
                       </Select>
 
                       {amount && (
-                        <div className="mt-6 p-6 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-2xl border border-blue-200/50 shadow-lg">
+                        <div className="mt-4 md:mt-6 p-4 md:p-6 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-xl md:rounded-2xl border border-blue-200/50 shadow-lg animate-scale-in">
                           <div className="text-right">
-                            <p className="text-blue-800 font-bold text-lg mb-3">
+                            <p className="text-blue-800 font-bold text-base md:text-lg mb-2 md:mb-3 mobile-text-lg">
                               ملخص الشحن:
                             </p>
-                            <div className="space-y-2">
-                              <p className="text-sm text-blue-700 font-medium">
+                            <div className="space-y-1 md:space-y-2">
+                              <p className="text-xs md:text-sm text-blue-700 font-medium mobile-text-lg">
                                 مبلغ الشحن:{" "}
                                 <span className="font-bold">{amount} جنيه</span>
                               </p>
-                              <p className="text-sm text-blue-600 font-medium">
+                              <p className="text-xs md:text-sm text-blue-600 font-medium mobile-text-lg">
                                 رسوم خدمة:{" "}
                                 <span className="font-bold">
                                   {(parseFloat(amount) * 0.2).toFixed(0)} جنيه
                                 </span>
                               </p>
-                              <div className="border-t border-blue-200 pt-2 mt-3">
-                                <p className="text-xl font-bold text-blue-900">
+                              <div className="border-t border-blue-200 pt-2 mt-2 md:mt-3">
+                                <p className="text-lg md:text-xl font-bold text-blue-900 mobile-text-xl">
                                   المجموع:{" "}
                                   {(parseFloat(amount) * 1.2).toFixed(0)} جنيه
                                 </p>
@@ -775,22 +901,26 @@ function App() {
                     </div>
                   </div>
 
-                  {/* زر الشحن */}
+                  {/* Enhanced زر الشحن */}
                   <Button
                     onClick={handleBalanceRecharge}
-                    className="w-full mt-10 bg-gradient-to-r from-red-600 via-orange-600 to-red-700 hover:from-red-700 hover:via-orange-700 hover:to-red-800 text-white font-bold py-8 text-2xl rounded-3xl flex items-center justify-center gap-4 shadow-2xl hover:shadow-3xl transition-all duration-500 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    className={`w-full mt-6 md:mt-10 bg-gradient-to-r from-red-600 via-orange-600 to-red-700 hover:from-red-700 hover:via-orange-700 hover:to-red-800 text-white font-bold py-6 md:py-8 text-xl md:text-2xl rounded-2xl md:rounded-3xl flex items-center justify-center gap-3 md:gap-4 shadow-2xl hover:shadow-3xl transition-all duration-500 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none btn-mobile-active touch-target-large ${
+                      mobileInteractions.isScrolling ? "opacity-90" : ""
+                    }`}
                     disabled={!phoneNumber || !amount}
                   >
-                    <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
+                    <div className="w-6 h-6 md:w-8 md:h-8 bg-white/20 rounded-lg md:rounded-xl flex items-center justify-center">
                       <svg
-                        className="w-5 h-5"
+                        className="w-4 h-4 md:w-5 md:h-5"
                         fill="currentColor"
                         viewBox="0 0 20 20"
                       >
                         <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
                       </svg>
                     </div>
-                    <span className="font-bold">اشحن الرصيد الآن</span>
+                    <span className="font-bold mobile-text-xl">
+                      اشحن الرصيد الآن
+                    </span>
                   </Button>
                 </div>
               </div>
