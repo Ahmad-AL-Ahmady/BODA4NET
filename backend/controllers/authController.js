@@ -317,7 +317,7 @@ export const protect = catchAsync(async (req, res, next) => {
     );
   }
 
-  // Grant access to protected route
+  // 5) Grant access to protected route
   req.user = currentUser;
   res.locals.user = currentUser;
   next();
@@ -384,7 +384,7 @@ export const verifyOTP = catchAsync(async (req, res, next) => {
     return next(new AppError("Please provide email and OTP", 400));
   }
 
-  // Find user with unexpired OTP
+  // 1) Find user with unexpired OTP
   const user = await User.findOne({ email }).select(
     "+passwordResetOTP +passwordResetOTPExpires"
   );
@@ -393,22 +393,22 @@ export const verifyOTP = catchAsync(async (req, res, next) => {
     return next(new AppError("User not found", 404));
   }
 
-  // Verify OTP
+  // 2) Verify OTP
   const isValid = user.verifyOTP(otp);
   if (!isValid) {
     return next(new AppError("Invalid OTP", 400));
   }
 
-  // Generate reset token
+  // 3) Generate reset token
   const resetToken = user.createPasswordResetToken();
 
-  // Clear OTP fields
+  // 4) Clear OTP fields
   user.passwordResetOTP = undefined;
   user.passwordResetOTPExpires = undefined;
 
   await user.save({ validateBeforeSave: false });
 
-  // Send token in cookie
+  // 5) Send token in cookie
   res.cookie("passwordResetToken", resetToken, {
     expires: new Date(Date.now() + 10 * 60 * 1000),
     httpOnly: true,
@@ -428,20 +428,20 @@ export const resetPassword = catchAsync(async (req, res, next) => {
   const { password, passwordConfirm, resetToken: bodyToken } = req.body;
   const cookieToken = req.cookies.passwordResetToken;
 
-  // Use either cookie token or body token
+  // 1) Use either cookie token or body token
   const resetToken = cookieToken || bodyToken;
 
   if (!resetToken) {
     return next(new AppError("Reset session has expired or is invalid", 400));
   }
 
-  // Hash token
+  // 2) Hash token
   const hashedToken = crypto
     .createHash("sha256")
     .update(resetToken)
     .digest("hex");
 
-  // Find user with token
+  // 3) Find user with token
   const user = await User.findOne({
     passwordResetToken: hashedToken,
     passwordResetTokenExpires: { $gt: Date.now() },
@@ -451,14 +451,14 @@ export const resetPassword = catchAsync(async (req, res, next) => {
     return next(new AppError("Reset session has expired or is invalid", 400));
   }
 
-  // Update password
+  // 4) Update password
   user.password = password;
   user.passwordConfirm = passwordConfirm;
   user.passwordResetToken = undefined;
   user.passwordResetTokenExpires = undefined;
   await user.save();
 
-  // Clear passwordResetToken cookie
+  // 5) Clear passwordResetToken cookie
   res.cookie("passwordResetToken", "loggedout", {
     expires: new Date(Date.now() + 10 * 1000),
     httpOnly: true,
@@ -467,7 +467,7 @@ export const resetPassword = catchAsync(async (req, res, next) => {
     path: "/",
   });
 
-  // Log user in
+  // 6) Log user in
   createSendToken(user, 200, req, res);
 });
 

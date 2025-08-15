@@ -1,6 +1,6 @@
 /**
  * appError.js
- * 
+ *
  * Custom error class for handling application-specific errors
  * Extends the built-in Error class with additional properties
  */
@@ -10,7 +10,7 @@ class AppError extends Error {
     super(message);
 
     this.statusCode = statusCode;
-    this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
+    this.status = statusCode; // Use the actual status code number
     this.isOperational = true;
 
     Error.captureStackTrace(this, this.constructor);
@@ -18,4 +18,3 @@ class AppError extends Error {
 }
 
 export default AppError;
-

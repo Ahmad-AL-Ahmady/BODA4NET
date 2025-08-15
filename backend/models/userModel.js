@@ -73,6 +73,14 @@ const userSchema = new mongoose.Schema(
       type: Date,
       select: false,
     },
+    passwordResetToken: {
+      type: String,
+      select: false,
+    },
+    passwordResetTokenExpires: {
+      type: Date,
+      select: false,
+    },
     emailVerified: {
       type: Boolean,
       default: false,
@@ -185,6 +193,20 @@ userSchema.methods.verifyOTP = function (candidateOTP) {
     .digest("hex");
 
   return this.passwordResetOTP === hashedCandidateOTP;
+};
+
+userSchema.methods.createPasswordResetToken = function () {
+  const resetToken = crypto.randomBytes(32).toString("hex");
+
+  this.passwordResetToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+
+  // Set expiration to 10 minutes
+  this.passwordResetTokenExpires = Date.now() + 10 * 60 * 1000;
+
+  return resetToken;
 };
 
 userSchema.methods.createEmailVerificationToken = function () {

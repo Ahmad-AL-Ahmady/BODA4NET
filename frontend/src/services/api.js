@@ -85,13 +85,17 @@ export const authAPI = {
   },
 
   // Reset password
-  resetPassword: async (email, otp, newPassword, passwordConfirm) => {
+  resetPassword: async (resetToken, newPassword, passwordConfirm) => {
     const response = await fetch(`${API_BASE_URL}/auth/resetPassword`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ email, otp, newPassword, passwordConfirm }),
+      body: JSON.stringify({
+        resetToken,
+        password: newPassword,
+        passwordConfirm,
+      }),
     });
     return handleResponse(response);
   },
@@ -344,4 +348,3 @@ export default {
   adminAPI,
   authUtils,
 };
-

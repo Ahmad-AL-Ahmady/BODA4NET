@@ -15,6 +15,7 @@ const ForgotPasswordPage = () => {
     newPassword: "",
     confirmPassword: "",
   });
+  const [resetToken, setResetToken] = useState("");
 
   const handleInputChange = (e) => {
     setFormData({
@@ -75,7 +76,12 @@ const ForgotPasswordPage = () => {
 
     try {
       setLoading(true);
-      await authAPI.verifyOTP(formData.email, formData.otp);
+      const response = await authAPI.verifyOTP(formData.email, formData.otp);
+
+      // Store the reset token from the response
+      if (response.resetToken) {
+        setResetToken(response.resetToken);
+      }
 
       Swal.fire({
         icon: "success",
@@ -123,8 +129,7 @@ const ForgotPasswordPage = () => {
     try {
       setLoading(true);
       await authAPI.resetPassword(
-        formData.email,
-        formData.otp,
+        resetToken,
         formData.newPassword,
         formData.confirmPassword
       );
@@ -200,13 +205,22 @@ const ForgotPasswordPage = () => {
           className="w-full text-right border-2 border-white/20 focus:border-white/40 bg-white/10 text-white placeholder-white rounded-xl p-4 transition-all duration-300"
         />
       </div>
-      <Button
-        type="submit"
-        disabled={loading}
-        className="w-full bg-gradient-to-r from-white/20 to-white/10 hover:from-white/30 hover:to-white/20 text-white font-bold py-4 rounded-xl transition-all duration-300 border border-white/20 disabled:opacity-50"
-      >
-        {loading ? "جاري التحقق..." : "التحقق من الرمز"}
-      </Button>
+      <div className="flex gap-3">
+        <Button
+          type="button"
+          onClick={() => setStep(1)}
+          className="flex-1 bg-gradient-to-r from-gray-500/20 to-gray-600/10 hover:from-gray-600/30 hover:to-gray-700/20 text-white font-bold py-4 rounded-xl transition-all duration-300 border border-white/20"
+        >
+          رجوع
+        </Button>
+        <Button
+          type="submit"
+          disabled={loading}
+          className="flex-1 bg-gradient-to-r from-white/20 to-white/10 hover:from-white/30 hover:to-white/20 text-white font-bold py-4 rounded-xl transition-all duration-300 border border-white/20 disabled:opacity-50"
+        >
+          {loading ? "جاري التحقق..." : "التحقق من الرمز"}
+        </Button>
+      </div>
     </form>
   );
 
@@ -248,13 +262,22 @@ const ForgotPasswordPage = () => {
           className="w-full text-right border-2 border-white/20 focus:border-white/40 bg-white/10 text-white placeholder-white rounded-xl p-4 transition-all duration-300"
         />
       </div>
-      <Button
-        type="submit"
-        disabled={loading}
-        className="w-full bg-gradient-to-r from-white/20 to-white/10 hover:from-white/30 hover:to-white/20 text-white font-bold py-4 rounded-xl transition-all duration-300 border border-white/20 disabled:opacity-50"
-      >
-        {loading ? "جاري إعادة التعيين..." : "إعادة تعيين كلمة المرور"}
-      </Button>
+      <div className="flex gap-3">
+        <Button
+          type="button"
+          onClick={() => setStep(2)}
+          className="flex-1 bg-gradient-to-r from-gray-500/20 to-gray-600/10 hover:from-gray-600/30 hover:to-gray-700/20 text-white font-bold py-4 rounded-xl transition-all duration-300 border border-white/20"
+        >
+          رجوع
+        </Button>
+        <Button
+          type="submit"
+          disabled={loading}
+          className="flex-1 bg-gradient-to-r from-white/20 to-white/10 hover:from-white/30 hover:to-white/20 text-white font-bold py-4 rounded-xl transition-all duration-300 border border-white/20 disabled:opacity-50"
+        >
+          {loading ? "جاري إعادة التعيين..." : "إعادة تعيين كلمة المرور"}
+        </Button>
+      </div>
     </form>
   );
 
@@ -331,6 +354,131 @@ const ForgotPasswordPage = () => {
               {getStepTitle()}
             </h1>
             <p className="text-white/80">{getStepDescription()}</p>
+          </div>
+
+          {/* Step Progress Indicator */}
+          <div className="mb-8">
+            <div className="flex items-center justify-center space-x-4 rtl:space-x-reverse">
+              {/* Step 1 */}
+              <div className="flex items-center">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+                    step >= 1
+                      ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg"
+                      : "bg-white/20 text-white/60 border border-white/20"
+                  }`}
+                >
+                  {step > 1 ? (
+                    <svg
+                      className="w-5 h-5"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  ) : (
+                    "1"
+                  )}
+                </div>
+                <span
+                  className={`ml-2 text-sm font-medium transition-all duration-300 ${
+                    step >= 1 ? "text-white" : "text-white/60"
+                  }`}
+                >
+                  إدخال البريد الإلكتروني
+                </span>
+              </div>
+
+              {/* Connector */}
+              <div
+                className={`w-12 h-0.5 transition-all duration-300 ${
+                  step >= 2
+                    ? "bg-gradient-to-r from-green-500 to-emerald-600"
+                    : "bg-white/20"
+                }`}
+              ></div>
+
+              {/* Step 2 */}
+              <div className="flex items-center">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+                    step >= 2
+                      ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg"
+                      : "bg-white/20 text-white/60 border border-white/20"
+                  }`}
+                >
+                  {step > 2 ? (
+                    <svg
+                      className="w-5 h-5"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  ) : (
+                    "2"
+                  )}
+                </div>
+                <span
+                  className={`ml-2 text-sm font-medium transition-all duration-300 ${
+                    step >= 2 ? "text-white" : "text-white/60"
+                  }`}
+                >
+                  التحقق من الرمز
+                </span>
+              </div>
+
+              {/* Connector */}
+              <div
+                className={`w-12 h-0.5 transition-all duration-300 ${
+                  step >= 3
+                    ? "bg-gradient-to-r from-green-500 to-emerald-600"
+                    : "bg-white/20"
+                }`}
+              ></div>
+
+              {/* Step 3 */}
+              <div className="flex items-center">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+                    step >= 3
+                      ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg"
+                      : "bg-white/20 text-white/60 border border-white/20"
+                  }`}
+                >
+                  {step > 3 ? (
+                    <svg
+                      className="w-5 h-5"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  ) : (
+                    "3"
+                  )}
+                </div>
+                <span
+                  className={`ml-2 text-sm font-medium transition-all duration-300 ${
+                    step >= 3 ? "text-white" : "text-white/60"
+                  }`}
+                >
+                  إعادة تعيين كلمة المرور
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Form */}

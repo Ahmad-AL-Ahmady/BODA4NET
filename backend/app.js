@@ -65,7 +65,7 @@ export function createApp() {
         "https://www.boda4net.com", // Add your production domain here
       ],
       credentials: true,
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
     })
   );
@@ -136,7 +136,11 @@ export function createApp() {
   // API key validation (skip for auth routes)
   app.use("/api", (req, res, next) => {
     // Skip API key validation for auth and users routes
-    if (req.path.startsWith('/auth') || req.path.startsWith('/users') || req.path.startsWith('/health')) {
+    if (
+      req.path.startsWith("/auth") ||
+      req.path.startsWith("/users") ||
+      req.path.startsWith("/health")
+    ) {
       return next();
     }
     return validateApiKeys(req, res, next);
