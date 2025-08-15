@@ -4,6 +4,8 @@ import { fileURLToPath } from "url";
 import compression from "compression";
 import morgan from "morgan";
 import cors from "cors";
+import cookieParser from "cookie-parser";
+import session from "express-session";
 
 import {
   securityHeaders,
@@ -28,12 +30,15 @@ import {
   VALIDATION_CONFIG,
   CORS_CONFIG,
 } from "./config/index.js";
+import passport from "./config/passport.js";
 
 // Import route modules
 import paymentRoutes from "./routes/paymentRoutes.js";
 import kashierRoutes from "./routes/kashierRoutes.js";
 import vodafoneRoutes from "./routes/vodafoneRoutes.js";
 import healthRoutes from "./routes/healthRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 
 // ES module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -79,6 +84,27 @@ export function createApp() {
   app.use(additionalSecurityHeaders);
   app.use(secureCookies);
 
+  // Cookie parser middleware
+  app.use(cookieParser());
+
+  // Session middleware (for Passport.js)
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET || "your-session-secret-key",
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: SERVER_CONFIG.NODE_ENV === "production",
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      },
+    })
+  );
+
+  // Passport middleware
+  app.use(passport.initialize());
+  app.use(passport.session());
+
   // CSP Violation reporting endpoint
   app.post("/api/csp-violation", cspViolationHandler);
 
@@ -107,11 +133,18 @@ export function createApp() {
   );
   app.use("/api/", speedLimiter);
 
-  // API key validation
-  app.use("/api/", validateApiKeys);
+  // API key validation (skip for auth routes)
+  app.use("/api", (req, res, next) => {
+    // Skip API key validation for auth and users routes
+    if (req.path.startsWith('/auth') || req.path.startsWith('/users') || req.path.startsWith('/health')) {
+      return next();
+    }
+    return validateApiKeys(req, res, next);
+  });
 
   // Serve static files
   app.use(express.static(path.join(__dirname, "../frontend/dist")));
+  app.use("/public", express.static(path.join(__dirname, "public")));
 
   // Handle favicon requests to prevent 404 errors
   app.get("/favicon.ico", (req, res) => {
@@ -119,6 +152,8 @@ export function createApp() {
   });
 
   // API Routes
+  app.use("/api/auth", authRoutes);
+  app.use("/api/users", userRoutes);
   app.use("/api/payment", paymentRoutes);
   app.use("/api/kashier", kashierRoutes);
   app.use("/api/vodafone", vodafoneRoutes);

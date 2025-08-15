@@ -10,6 +10,50 @@ export const SERVER_CONFIG = {
   TRUST_PROXY: 1,
 };
 
+// MongoDB configuration
+export const MONGODB_CONFIG = {
+  URL: process.env.MONGO_URL,
+  USER: process.env.MONGO_USER,
+  PASS: process.env.MONGO_PASS,
+  OPTIONS: {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    maxPoolSize: 10,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+    bufferMaxEntries: 0,
+    bufferCommands: false,
+  },
+};
+
+// JWT configuration
+export const JWT_CONFIG = {
+  SECRET:
+    process.env.JWT_SECRET || "your-super-secret-jwt-key-change-in-production",
+  EXPIRES_IN: process.env.JWT_EXPIRES_IN || "90d",
+  COOKIE_EXPIRES_IN: parseInt(process.env.JWT_COOKIE_EXPIRES_IN) || 90,
+};
+
+// Email configuration
+export const EMAIL_CONFIG = {
+  HOST: process.env.EMAIL_HOST || "smtp.gmail.com",
+  PORT: parseInt(process.env.EMAIL_PORT) || 587,
+  USER: process.env.EMAIL_USER,
+  PASS: process.env.EMAIL_PASS,
+  FROM: process.env.EMAIL_FROM || "noreply@boda4net.com",
+};
+
+// Base URL configuration
+export const BASE_URL = process.env.BASE_URL || "http://localhost:3001";
+
+// Google OAuth configuration
+export const GOOGLE_CONFIG = {
+  CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+  CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+  CALLBACK_URL:
+    process.env.GOOGLE_CALLBACK_URL || `${BASE_URL}/api/auth/google/callback`,
+};
+
 // Rate limiting configuration
 export const RATE_LIMIT_CONFIG = {
   WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000, // 15 minutes
@@ -120,6 +164,8 @@ export const CORS_CONFIG = {
 
 // Required environment variables
 export const REQUIRED_ENV_VARS = [
+  "MONGO_URL",
+  "JWT_SECRET",
   "UQ_PUBLIC_KEY",
   "UQ_SECRET_KEY",
   "KASHIER_PAYMENT_API_KEY",
@@ -130,6 +176,25 @@ export const REQUIRED_ENV_VARS = [
 // Validate required environment variables
 export function validateEnvironment() {
   const missing = [];
+
+  if (!MONGODB_CONFIG.URL) {
+    console.error(
+      "❌ Missing MongoDB connection URL. Please set MONGO_URL in your .env file"
+    );
+    console.error("📝 Copy env.example to .env and fill in your MongoDB URL");
+    missing.push("MongoDB URL");
+  }
+
+  if (
+    !JWT_CONFIG.SECRET ||
+    JWT_CONFIG.SECRET === "your-super-secret-jwt-key-change-in-production"
+  ) {
+    console.error(
+      "❌ Missing or default JWT secret. Please set JWT_SECRET in your .env file"
+    );
+    console.error("📝 Set a strong JWT secret for security");
+    missing.push("JWT secret");
+  }
 
   if (!UQUID_CONFIG.API_KEY || !UQUID_CONFIG.API_SECRET) {
     console.error(
@@ -159,6 +224,9 @@ export function validateEnvironment() {
 // Check if all required configurations are available
 export function isConfigurationValid() {
   return (
+    MONGODB_CONFIG.URL &&
+    JWT_CONFIG.SECRET &&
+    JWT_CONFIG.SECRET !== "your-super-secret-jwt-key-change-in-production" &&
     UQUID_CONFIG.API_KEY &&
     UQUID_CONFIG.API_SECRET &&
     KASHIER_CONFIG.API_KEY &&
